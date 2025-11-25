@@ -151,6 +151,9 @@ const Dashboard = () => {
             <span className="font-bold text-xl">SmartTab AI</span>
           </Link>
           <nav className="flex items-center gap-4">
+            <Link to="/pricing">
+              <Button variant="ghost" size="sm">Pricing</Button>
+            </Link>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm">
