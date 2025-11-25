@@ -1,9 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // Mock data for demonstration
 const mockRecommendations = [
@@ -46,6 +67,77 @@ const mockArchivedTabs = [
 
 const Dashboard = () => {
   const [activeView, setActiveView] = useState<"recommendations" | "recent" | "archived">("recommendations");
+  const [subscription, setSubscription] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    checkAuth();
+    loadSubscription();
+  }, []);
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate("/auth");
+    }
+  };
+
+  const loadSubscription = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
+      if (error) throw error;
+      setSubscription(data);
+    } catch (error: any) {
+      console.error("Error loading subscription:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelTrial = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from("subscriptions")
+        .update({ 
+          status: "cancelled",
+          cancel_at_period_end: true 
+        })
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Trial cancelled",
+        description: "Your trial has been cancelled. You can still use the service until it expires.",
+      });
+
+      loadSubscription();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/");
+  };
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
@@ -59,8 +151,35 @@ const Dashboard = () => {
             <span className="font-bold text-xl">SmartTab AI</span>
           </Link>
           <nav className="flex items-center gap-4">
-            <Button variant="ghost" size="sm">Analytics</Button>
-            <Button variant="ghost" size="sm">Settings</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <User className="w-4 h-4 mr-2" />
+                  Account
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to="/profile" className="flex items-center cursor-pointer">
+                    <User className="w-4 h-4 mr-2" />
+                    Profile Settings
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/payment-methods" className="flex items-center cursor-pointer">
+                    <CreditCard className="w-4 h-4 mr-2" />
+                    Payment Methods
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="outline" size="sm">
               Install Extension
             </Button>
@@ -295,6 +414,54 @@ const Dashboard = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {!loading && subscription && subscription.status === "trial" && (
+              <Card className="shadow-card border-destructive/20">
+                <CardHeader>
+                  <CardTitle>Trial Status</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                      <p className="text-sm font-medium mb-1">Trial Period</p>
+                      <p className="text-sm text-muted-foreground">
+                        {subscription.trial_ends_at
+                          ? `Ends ${new Date(subscription.trial_ends_at).toLocaleDateString()}`
+                          : "Active"}
+                      </p>
+                    </div>
+                    {!subscription.cancel_at_period_end && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" className="w-full" size="sm">
+                            Cancel Trial
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Cancel trial?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              You will still have access until your trial period ends. You can reactivate anytime before it expires.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Keep Trial</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleCancelTrial}>
+                              Cancel Trial
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                    {subscription.cancel_at_period_end && (
+                      <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                        <p className="text-sm text-destructive">Trial will be cancelled at period end</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </div>

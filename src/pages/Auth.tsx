@@ -1,31 +1,85 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Brain, ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 const Auth = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if user is already logged in
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        navigate("/dashboard");
+      }
+    });
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        navigate("/dashboard");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // Mock authentication for demo
-    setTimeout(() => {
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/dashboard`,
+            data: {
+              full_name: fullName,
+            },
+          },
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "Account created!",
+          description: "Welcome to SmartTab AI. Redirecting to dashboard...",
+        });
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "Welcome back!",
+          description: "Redirecting to dashboard...",
+        });
+      }
+    } catch (error: any) {
       toast({
-        title: isSignUp ? "Account created!" : "Welcome back!",
-        description: "This is a demo. Connect Lovable Cloud to enable real authentication.",
+        title: "Error",
+        description: error.message || "An error occurred during authentication",
+        variant: "destructive",
       });
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -52,6 +106,19 @@ const Auth = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleAuth} className="space-y-4">
+              {isSignUp && (
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder="John Doe"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -72,6 +139,7 @@ const Auth = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
+                  minLength={6}
                 />
               </div>
               <Button
@@ -96,12 +164,6 @@ const Auth = () => {
                   ? "Already have an account? Sign in"
                   : "Don't have an account? Sign up"}
               </button>
-            </div>
-
-            <div className="mt-6 p-4 rounded-lg bg-muted/50 border border-border">
-              <p className="text-xs text-muted-foreground text-center">
-                <strong>Demo Mode:</strong> Enable Lovable Cloud to activate real authentication
-              </p>
             </div>
           </CardContent>
         </Card>
