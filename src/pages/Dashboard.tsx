@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings } from "lucide-react";
+import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useSubscription } from "@/hooks/useSubscription";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -69,8 +70,10 @@ const Dashboard = () => {
   const [activeView, setActiveView] = useState<"recommendations" | "recent" | "archived">("recommendations");
   const [subscription, setSubscription] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [portalLoading, setPortalLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { isPro, subscriptionEnd, openCustomerPortal } = useSubscription();
 
   useEffect(() => {
     checkAuth();
@@ -137,6 +140,21 @@ const Dashboard = () => {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate("/");
+  };
+
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    try {
+      await openCustomerPortal();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to open subscription management. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPortalLoading(false);
+    }
   };
 
   return (
@@ -418,7 +436,55 @@ const Dashboard = () => {
               </CardContent>
             </Card>
 
-            {!loading && subscription && subscription.status === "trial" && (
+            {isPro && (
+              <Card className="shadow-card border-primary/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Crown className="w-5 h-5 text-primary" />
+                    Pro Subscription
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                      <p className="text-sm font-medium mb-1">Active Plan</p>
+                      <p className="text-sm text-muted-foreground">
+                        SmartTab AI Pro
+                      </p>
+                    </div>
+                    {subscriptionEnd && (
+                      <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                        <p className="text-sm font-medium mb-1">Next Billing</p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(subscriptionEnd).toLocaleDateString()}
+                        </p>
+                      </div>
+                    )}
+                    <Button 
+                      variant="outline" 
+                      className="w-full" 
+                      size="sm"
+                      onClick={handleManageSubscription}
+                      disabled={portalLoading}
+                    >
+                      {portalLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          <Settings className="w-4 h-4 mr-2" />
+                          Manage Subscription
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {!loading && !isPro && subscription && subscription.status === "trial" && (
               <Card className="shadow-card border-destructive/20">
                 <CardHeader>
                   <CardTitle>Trial Status</CardTitle>
