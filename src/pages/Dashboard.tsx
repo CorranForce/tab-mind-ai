@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2 } from "lucide-react";
+import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock } from "lucide-react";
+import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -306,7 +307,7 @@ const Dashboard = () => {
               <CardContent>
                 {activeView === "recommendations" && (
                   <div className="space-y-4">
-                    {mockRecommendations.map((tab) => (
+                    {(isPro ? mockRecommendations : mockRecommendations.slice(0, 1)).map((tab) => (
                       <div
                         key={tab.id}
                         className="p-4 rounded-lg border border-border hover:border-primary/50 transition-all hover:shadow-glow cursor-pointer group"
@@ -336,6 +337,23 @@ const Dashboard = () => {
                         </div>
                       </div>
                     ))}
+                    {!isPro && (
+                      <div className="p-4 rounded-lg border border-dashed border-primary/30 bg-primary/5">
+                        <div className="flex items-center gap-3">
+                          <Lock className="w-5 h-5 text-primary" />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">2 more recommendations available</p>
+                            <p className="text-xs text-muted-foreground">Upgrade to Pro for unlimited AI recommendations</p>
+                          </div>
+                          <Link to="/pricing">
+                            <Button size="sm">
+                              <Crown className="w-4 h-4 mr-2" />
+                              Upgrade
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -391,34 +409,41 @@ const Dashboard = () => {
 
           {/* Right Column - AI Insights */}
           <div className="space-y-6">
-            <Card className="shadow-card border-accent/20">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-accent" />
-                  AI Insights
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-3 rounded-lg bg-accent/5 border border-accent/20">
-                  <p className="text-sm font-medium mb-1">Pattern Detected</p>
-                  <p className="text-sm text-muted-foreground">
-                    You typically work on GitHub between 9-11 AM
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                  <p className="text-sm font-medium mb-1">Suggestion</p>
-                  <p className="text-sm text-muted-foreground">
-                    Group your design tools tabs for faster access
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-accent/5 border border-accent/20">
-                  <p className="text-sm font-medium mb-1">Archive Ready</p>
-                  <p className="text-sm text-muted-foreground">
-                    8 tabs haven't been used in 5+ days
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+            {isPro ? (
+              <Card className="shadow-card border-accent/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-accent" />
+                    AI Insights
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-3 rounded-lg bg-accent/5 border border-accent/20">
+                    <p className="text-sm font-medium mb-1">Pattern Detected</p>
+                    <p className="text-sm text-muted-foreground">
+                      You typically work on GitHub between 9-11 AM
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                    <p className="text-sm font-medium mb-1">Suggestion</p>
+                    <p className="text-sm text-muted-foreground">
+                      Group your design tools tabs for faster access
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-accent/5 border border-accent/20">
+                    <p className="text-sm font-medium mb-1">Archive Ready</p>
+                    <p className="text-sm text-muted-foreground">
+                      8 tabs haven't been used in 5+ days
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <UpgradePrompt 
+                feature="AI Insights" 
+                description="Get personalized patterns, suggestions, and smart archive recommendations based on your browsing behavior."
+              />
+            )}
 
             <Card className="shadow-card">
               <CardHeader>
