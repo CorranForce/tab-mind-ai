@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock } from "lucide-react";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { FeatureComparisonModal } from "@/components/FeatureComparisonModal";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -72,6 +73,7 @@ const Dashboard = () => {
   const [subscription, setSubscription] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { isPro, subscriptionEnd, openCustomerPortal } = useSubscription();
@@ -338,19 +340,20 @@ const Dashboard = () => {
                       </div>
                     ))}
                     {!isPro && (
-                      <div className="p-4 rounded-lg border border-dashed border-primary/30 bg-primary/5">
+                      <div 
+                        className="p-4 rounded-lg border border-dashed border-primary/30 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors"
+                        onClick={() => setShowUpgradeModal(true)}
+                      >
                         <div className="flex items-center gap-3">
                           <Lock className="w-5 h-5 text-primary" />
                           <div className="flex-1">
                             <p className="text-sm font-medium">2 more recommendations available</p>
                             <p className="text-xs text-muted-foreground">Upgrade to Pro for unlimited AI recommendations</p>
                           </div>
-                          <Link to="/pricing">
-                            <Button size="sm">
-                              <Crown className="w-4 h-4 mr-2" />
-                              Upgrade
-                            </Button>
-                          </Link>
+                          <Button size="sm">
+                            <Crown className="w-4 h-4 mr-2" />
+                            Upgrade
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -559,6 +562,12 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      <FeatureComparisonModal 
+        open={showUpgradeModal} 
+        onOpenChange={setShowUpgradeModal}
+        highlightFeature="AI Recommendations"
+      />
     </div>
   );
 };
