@@ -3,13 +3,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Brain, ArrowLeft } from "lucide-react";
+import { Brain, ArrowLeft, Mail } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+type AuthMode = "signin" | "signup" | "forgot";
+
 const Auth = () => {
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -40,7 +42,19 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      if (isSignUp) {
+      if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth?mode=reset`,
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "Check your email",
+          description: "We've sent you a password reset link.",
+        });
+        setMode("signin");
+      } else if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -82,6 +96,22 @@ const Auth = () => {
     }
   };
 
+  const getTitle = () => {
+    switch (mode) {
+      case "signup": return "Create an account";
+      case "forgot": return "Reset password";
+      default: return "Welcome back";
+    }
+  };
+
+  const getDescription = () => {
+    switch (mode) {
+      case "signup": return "Start organizing your tabs with AI";
+      case "forgot": return "Enter your email to receive a reset link";
+      default: return "Sign in to access your dashboard";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -93,20 +123,22 @@ const Auth = () => {
         <Card className="shadow-card border-border">
           <CardHeader className="space-y-1 text-center">
             <div className="w-12 h-12 rounded-xl bg-gradient-hero flex items-center justify-center mx-auto mb-4">
-              <Brain className="w-6 h-6 text-primary-foreground" />
+              {mode === "forgot" ? (
+                <Mail className="w-6 h-6 text-primary-foreground" />
+              ) : (
+                <Brain className="w-6 h-6 text-primary-foreground" />
+              )}
             </div>
             <CardTitle className="text-2xl font-bold">
-              {isSignUp ? "Create an account" : "Welcome back"}
+              {getTitle()}
             </CardTitle>
             <CardDescription>
-              {isSignUp
-                ? "Start organizing your tabs with AI"
-                : "Sign in to access your dashboard"}
+              {getDescription()}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleAuth} className="space-y-4">
-              {isSignUp && (
+              {mode === "signup" && (
                 <div className="space-y-2">
                   <Label htmlFor="fullName">Full Name</Label>
                   <Input
@@ -130,18 +162,31 @@ const Auth = () => {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  minLength={6}
-                />
-              </div>
+              {mode !== "forgot" && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="password">Password</Label>
+                    {mode === "signin" && (
+                      <button
+                        type="button"
+                        onClick={() => setMode("forgot")}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Forgot password?
+                      </button>
+                    )}
+                  </div>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                  />
+                </div>
+              )}
               <Button
                 type="submit"
                 className="w-full bg-gradient-hero hover:opacity-90 transition-opacity"
@@ -149,21 +194,32 @@ const Auth = () => {
               >
                 {loading
                   ? "Loading..."
-                  : isSignUp
+                  : mode === "signup"
                   ? "Create Account"
+                  : mode === "forgot"
+                  ? "Send Reset Link"
                   : "Sign In"}
               </Button>
             </form>
 
-            <div className="mt-6 text-center text-sm">
-              <button
-                onClick={() => setIsSignUp(!isSignUp)}
-                className="text-primary hover:underline"
-              >
-                {isSignUp
-                  ? "Already have an account? Sign in"
-                  : "Don't have an account? Sign up"}
-              </button>
+            <div className="mt-6 text-center text-sm space-y-2">
+              {mode === "forgot" ? (
+                <button
+                  onClick={() => setMode("signin")}
+                  className="text-primary hover:underline"
+                >
+                  Back to sign in
+                </button>
+              ) : (
+                <button
+                  onClick={() => setMode(mode === "signup" ? "signin" : "signup")}
+                  className="text-primary hover:underline"
+                >
+                  {mode === "signup"
+                    ? "Already have an account? Sign in"
+                    : "Don't have an account? Sign up"}
+                </button>
+              )}
             </div>
           </CardContent>
         </Card>
