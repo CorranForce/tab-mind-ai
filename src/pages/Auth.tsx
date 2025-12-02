@@ -3,8 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Brain, ArrowLeft, Mail, Chrome } from "lucide-react";
-import { FaGithub } from "react-icons/fa";
+import { Brain, ArrowLeft, Mail } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -39,7 +38,7 @@ const Auth = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  const handleSocialLogin = async (provider: "google" | "github") => {
+  const handleSocialLogin = async (provider: "google") => {
     setLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -235,28 +234,16 @@ const Auth = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handleSocialLogin("google")}
-                    disabled={loading}
-                    className="w-full"
-                  >
-                    <FcGoogle className="w-5 h-5 mr-2" />
-                    Google
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handleSocialLogin("github")}
-                    disabled={loading}
-                    className="w-full"
-                  >
-                    <FaGithub className="w-5 h-5 mr-2" />
-                    GitHub
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleSocialLogin("google")}
+                  disabled={loading}
+                  className="w-full"
+                >
+                  <FcGoogle className="w-5 h-5 mr-2" />
+                  Continue with Google
+                </Button>
               </>
             )}
 
