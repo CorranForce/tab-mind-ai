@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock } from "lucide-react";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { FeatureComparisonModal } from "@/components/FeatureComparisonModal";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -76,17 +76,58 @@ const Dashboard = () => {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { isPro, subscriptionEnd, openCustomerPortal } = useSubscription();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { isPro, subscriptionEnd, openCustomerPortal, checkSubscription } = useSubscription();
+  const upgradeEmailSentRef = useRef(false);
 
   useEffect(() => {
     checkAuth();
     loadSubscription();
   }, []);
 
+  // Handle successful checkout - send upgrade email
+  useEffect(() => {
+    const checkoutStatus = searchParams.get("checkout");
+    if (checkoutStatus === "success" && !upgradeEmailSentRef.current) {
+      upgradeEmailSentRef.current = true;
+      handleUpgradeSuccess();
+    }
+  }, [searchParams]);
+
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       navigate("/auth");
+    }
+  };
+
+  const handleUpgradeSuccess = async () => {
+    try {
+      // Send upgrade email and update subscription status
+      const { error } = await supabase.functions.invoke("send-upgrade-email");
+      
+      if (error) {
+        console.error("Error sending upgrade email:", error);
+      } else {
+        toast({
+          title: "Welcome to Pro!",
+          description: "Your subscription is now active. A confirmation email has been sent.",
+        });
+      }
+
+      // Refresh subscription status
+      await checkSubscription();
+      await loadSubscription();
+
+      // Clear the checkout param from URL
+      setSearchParams({});
+    } catch (error: any) {
+      console.error("Error processing upgrade:", error);
+      toast({
+        title: "Subscription Activated",
+        description: "Your Pro subscription is now active.",
+      });
+      setSearchParams({});
     }
   };
 
