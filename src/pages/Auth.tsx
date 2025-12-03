@@ -7,8 +7,21 @@ import { Brain, ArrowLeft, Mail } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { z } from "zod";
 
 type AuthMode = "signin" | "signup" | "forgot";
+
+// Validation schemas
+const emailSchema = z.string().trim().email("Please enter a valid email address").max(255, "Email must be less than 255 characters");
+
+const passwordSchema = z.string()
+  .min(6, "Password must be at least 6 characters")
+  .max(72, "Password must be less than 72 characters");
+
+const fullNameSchema = z.string()
+  .trim()
+  .min(1, "Full name is required")
+  .max(100, "Name must be less than 100 characters");
 
 const Auth = () => {
   const [mode, setMode] = useState<AuthMode>("signin");
@@ -16,6 +29,7 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string }>({});
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -37,13 +51,52 @@ const Auth = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  // Clear errors when mode changes
+  useEffect(() => {
+    setErrors({});
+  }, [mode]);
+
+  const validateForm = (): boolean => {
+    const newErrors: { email?: string; password?: string; fullName?: string } = {};
+
+    // Validate email
+    const emailResult = emailSchema.safeParse(email);
+    if (!emailResult.success) {
+      newErrors.email = emailResult.error.errors[0].message;
+    }
+
+    // Validate password (not needed for forgot mode)
+    if (mode !== "forgot") {
+      const passwordResult = passwordSchema.safeParse(password);
+      if (!passwordResult.success) {
+        newErrors.password = passwordResult.error.errors[0].message;
+      }
+    }
+
+    // Validate full name (only for signup)
+    if (mode === "signup") {
+      const fullNameResult = fullNameSchema.safeParse(fullName);
+      if (!fullNameResult.success) {
+        newErrors.fullName = fullNameResult.error.errors[0].message;
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (mode === "forgot") {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: `${window.location.origin}/auth?mode=reset`,
         });
 
@@ -56,12 +109,12 @@ const Auth = () => {
         setMode("signin");
       } else if (mode === "signup") {
         const { error } = await supabase.auth.signUp({
-          email,
+          email: email.trim(),
           password,
           options: {
             emailRedirectTo: `${window.location.origin}/dashboard`,
             data: {
-              full_name: fullName,
+              full_name: fullName.trim(),
             },
           },
         });
@@ -74,7 +127,7 @@ const Auth = () => {
         });
       } else {
         const { error } = await supabase.auth.signInWithPassword({
-          email,
+          email: email.trim(),
           password,
         });
 
@@ -146,9 +199,15 @@ const Auth = () => {
                     type="text"
                     placeholder="John Doe"
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required
+                    onChange={(e) => {
+                      setFullName(e.target.value);
+                      if (errors.fullName) setErrors(prev => ({ ...prev, fullName: undefined }));
+                    }}
+                    className={errors.fullName ? "border-destructive" : ""}
                   />
+                  {errors.fullName && (
+                    <p className="text-sm text-destructive">{errors.fullName}</p>
+                  )}
                 </div>
               )}
               <div className="space-y-2">
@@ -158,9 +217,15 @@ const Auth = () => {
                   type="email"
                   placeholder="name@example.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (errors.email) setErrors(prev => ({ ...prev, email: undefined }));
+                  }}
+                  className={errors.email ? "border-destructive" : ""}
                 />
+                {errors.email && (
+                  <p className="text-sm text-destructive">{errors.email}</p>
+                )}
               </div>
               {mode !== "forgot" && (
                 <div className="space-y-2">
@@ -181,10 +246,15 @@ const Auth = () => {
                     type="password"
                     placeholder="••••••••"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    minLength={6}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errors.password) setErrors(prev => ({ ...prev, password: undefined }));
+                    }}
+                    className={errors.password ? "border-destructive" : ""}
                   />
+                  {errors.password && (
+                    <p className="text-sm text-destructive">{errors.password}</p>
+                  )}
                 </div>
               )}
               <Button
