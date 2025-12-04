@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock } from "lucide-react";
+import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Mail, Check } from "lucide-react";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { FeatureComparisonModal } from "@/components/FeatureComparisonModal";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -79,6 +80,9 @@ const Dashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { isPro, subscriptionEnd, openCustomerPortal, checkSubscription, createCheckout } = useSubscription();
   const [skipTrialLoading, setSkipTrialLoading] = useState(false);
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
+  const [waitlistJoined, setWaitlistJoined] = useState(false);
   const upgradeEmailSentRef = useRef(false);
 
   useEffect(() => {
@@ -495,13 +499,88 @@ const Dashboard = () => {
                 <CardTitle>Extension Status</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="p-4 rounded-lg bg-muted/50 border border-border text-center">
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Extension not detected
+                <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                  <p className="text-sm text-muted-foreground mb-3 text-center">
+                    Browser extension coming soon!
                   </p>
-                  <Button className="w-full" disabled>
-                    Coming Soon
-                  </Button>
+                  {waitlistJoined ? (
+                    <div className="flex items-center justify-center gap-2 text-sm text-primary py-2">
+                      <Check className="w-4 h-4" />
+                      <span>You're on the waitlist!</span>
+                    </div>
+                  ) : (
+                    <form 
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!waitlistEmail.trim()) return;
+                        
+                        setWaitlistLoading(true);
+                        try {
+                          const { data: { user } } = await supabase.auth.getUser();
+                          const { error } = await supabase
+                            .from("extension_waitlist")
+                            .insert({ 
+                              email: waitlistEmail.trim(),
+                              user_id: user?.id || null
+                            });
+                          
+                          if (error) {
+                            if (error.code === "23505") {
+                              toast({
+                                title: "Already on waitlist",
+                                description: "This email is already registered for the waitlist.",
+                              });
+                              setWaitlistJoined(true);
+                            } else {
+                              throw error;
+                            }
+                          } else {
+                            toast({
+                              title: "You're on the list!",
+                              description: "We'll notify you when the extension launches.",
+                            });
+                            setWaitlistJoined(true);
+                          }
+                        } catch (error: any) {
+                          toast({
+                            title: "Error",
+                            description: "Failed to join waitlist. Please try again.",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setWaitlistLoading(false);
+                        }
+                      }}
+                      className="space-y-2"
+                    >
+                      <Input
+                        type="email"
+                        placeholder="Enter your email"
+                        value={waitlistEmail}
+                        onChange={(e) => setWaitlistEmail(e.target.value)}
+                        required
+                        className="text-sm"
+                      />
+                      <Button 
+                        type="submit" 
+                        className="w-full" 
+                        size="sm"
+                        disabled={waitlistLoading}
+                      >
+                        {waitlistLoading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Joining...
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="w-4 h-4 mr-2" />
+                            Join Waitlist
+                          </>
+                        )}
+                      </Button>
+                    </form>
+                  )}
                 </div>
               </CardContent>
             </Card>
