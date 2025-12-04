@@ -77,7 +77,8 @@ const Dashboard = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isPro, subscriptionEnd, openCustomerPortal, checkSubscription } = useSubscription();
+  const { isPro, subscriptionEnd, openCustomerPortal, checkSubscription, createCheckout } = useSubscription();
+  const [skipTrialLoading, setSkipTrialLoading] = useState(false);
   const upgradeEmailSentRef = useRef(false);
 
   useEffect(() => {
@@ -568,6 +569,37 @@ const Dashboard = () => {
                           : "Active"}
                       </p>
                     </div>
+                    <Button 
+                      className="w-full" 
+                      size="sm"
+                      onClick={async () => {
+                        setSkipTrialLoading(true);
+                        try {
+                          await createCheckout("price_1SYUAcKq904QPKp45gvjL9Cg");
+                        } catch (error: any) {
+                          toast({
+                            title: "Error",
+                            description: "Failed to start checkout. Please try again.",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setSkipTrialLoading(false);
+                        }
+                      }}
+                      disabled={skipTrialLoading}
+                    >
+                      {skipTrialLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          <Crown className="w-4 h-4 mr-2" />
+                          Skip Trial & Start Pro
+                        </>
+                      )}
+                    </Button>
                     {!subscription.cancel_at_period_end && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
