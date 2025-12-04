@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Mail, Check } from "lucide-react";
+import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Mail, Check, Shield } from "lucide-react";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { FeatureComparisonModal } from "@/components/FeatureComparisonModal";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -83,6 +83,7 @@ const Dashboard = () => {
   const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistLoading, setWaitlistLoading] = useState(false);
   const [waitlistJoined, setWaitlistJoined] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const upgradeEmailSentRef = useRef(false);
 
   useEffect(() => {
@@ -103,6 +104,9 @@ const Dashboard = () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       navigate("/auth");
+    } else {
+      // Check if user is admin
+      setIsAdmin(session.user.email === "corranforce@gmail.com");
     }
   };
 
@@ -244,6 +248,14 @@ const Dashboard = () => {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                {isAdmin && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin" className="flex items-center cursor-pointer">
+                      <Shield className="w-4 h-4 mr-2" />
+                      Admin Panel
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer">
                   <LogOut className="w-4 h-4 mr-2" />
                   Sign Out
@@ -535,9 +547,14 @@ const Dashboard = () => {
                               throw error;
                             }
                           } else {
+                            // Send confirmation email
+                            supabase.functions.invoke("send-waitlist-confirmation", {
+                              body: { email: waitlistEmail.trim() }
+                            }).catch(err => console.error("Failed to send confirmation email:", err));
+                            
                             toast({
                               title: "You're on the list!",
-                              description: "We'll notify you when the extension launches.",
+                              description: "We'll notify you when the extension launches. Check your email for confirmation.",
                             });
                             setWaitlistJoined(true);
                           }
