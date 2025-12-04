@@ -246,8 +246,8 @@ const Dashboard = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" size="sm">
-              Install Extension
+            <Button variant="outline" size="sm" disabled>
+              Coming Soon
             </Button>
           </nav>
         </div>
@@ -499,8 +499,8 @@ const Dashboard = () => {
                   <p className="text-sm text-muted-foreground mb-3">
                     Extension not detected
                   </p>
-                  <Button className="w-full">
-                    Install Extension
+                  <Button className="w-full" disabled>
+                    Coming Soon
                   </Button>
                 </div>
               </CardContent>
