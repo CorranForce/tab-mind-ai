@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Mail, Check, Shield } from "lucide-react";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
+import { TrialCountdown } from "@/components/TrialCountdown";
 import { FeatureComparisonModal } from "@/components/FeatureComparisonModal";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -504,6 +505,10 @@ const Dashboard = () => {
                 feature="AI Insights" 
                 description="Get personalized patterns, suggestions, and smart archive recommendations based on your browsing behavior."
               />
+            )}
+
+            {subscription?.status === "cancelled" && subscription?.trial_ends_at && (
+              <TrialCountdown trialEndsAt={subscription.trial_ends_at} />
             )}
 
             <Card className="shadow-card">
