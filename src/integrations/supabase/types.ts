@@ -108,6 +108,7 @@ export type Database = {
           status: string
           stripe_subscription_id: string | null
           trial_ends_at: string | null
+          trial_reminder_sent: boolean | null
           updated_at: string | null
           user_id: string
         }
@@ -120,6 +121,7 @@ export type Database = {
           status?: string
           stripe_subscription_id?: string | null
           trial_ends_at?: string | null
+          trial_reminder_sent?: boolean | null
           updated_at?: string | null
           user_id: string
         }
@@ -132,6 +134,7 @@ export type Database = {
           status?: string
           stripe_subscription_id?: string | null
           trial_ends_at?: string | null
+          trial_reminder_sent?: boolean | null
           updated_at?: string | null
           user_id?: string
         }
