@@ -19,16 +19,99 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendApiKey) {
+      throw new Error("RESEND_API_KEY is not configured");
+    }
+
+    // Check for test mode
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      // No body or invalid JSON is fine
+    }
+
+    if (body.testEmail) {
+      logStep("Test mode - sending to", { email: body.testEmail });
+      
+      const response = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "SmartTab AI <onboarding@resend.dev>",
+          to: [body.testEmail],
+          subject: "⏰ [TEST] Your SmartTab AI Trial Expires in 24 Hours",
+          html: `
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <style>
+                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+                  .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
+                  .header { text-align: center; margin-bottom: 30px; }
+                  .logo { font-size: 24px; font-weight: bold; color: #6366f1; }
+                  .content { background: #f9fafb; border-radius: 12px; padding: 30px; margin-bottom: 30px; }
+                  .warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }
+                  .cta-button { display: inline-block; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; }
+                  .footer { text-align: center; font-size: 14px; color: #6b7280; }
+                  .test-banner { background: #ef4444; color: white; padding: 8px; text-align: center; font-weight: bold; }
+                </style>
+              </head>
+              <body>
+                <div class="test-banner">🧪 TEST EMAIL - This is a test</div>
+                <div class="container">
+                  <div class="header">
+                    <div class="logo">🧠 SmartTab AI</div>
+                  </div>
+                  <div class="content">
+                    <h1 style="margin-top: 0;">Your Trial is Ending Soon!</h1>
+                    <div class="warning">
+                      <p style="margin: 0; font-size: 20px; font-weight: bold;">⏰ ~24 hours remaining</p>
+                    </div>
+                    <p>Your SmartTab AI trial will expire soon. Don't lose access to:</p>
+                    <ul>
+                      <li>✨ AI-powered tab recommendations</li>
+                      <li>📊 Personalized browsing insights</li>
+                      <li>🗂️ Smart tab organization</li>
+                      <li>⏱️ Time-saving automation</li>
+                    </ul>
+                    <div style="text-align: center; margin: 30px 0;">
+                      <a href="https://wjmkijvckvnrrsjzgwge.lovableproject.com/pricing" class="cta-button">
+                        Upgrade to Pro Now →
+                      </a>
+                    </div>
+                  </div>
+                  <div class="footer">
+                    <p>© ${new Date().getFullYear()} SmartTab AI. All rights reserved.</p>
+                  </div>
+                </div>
+              </body>
+            </html>
+          `,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(`Failed to send test email: ${errorData}`);
+      }
+
+      logStep("Test email sent successfully");
+      return new Response(JSON.stringify({ success: true, message: "Test email sent" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       { auth: { persistSession: false } }
     );
-
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendApiKey) {
-      throw new Error("RESEND_API_KEY is not configured");
-    }
 
     // Get trials expiring in the next 24-25 hours that haven't been notified
     const now = new Date();
