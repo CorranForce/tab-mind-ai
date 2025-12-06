@@ -140,6 +140,54 @@ export type Database = {
         }
         Relationships: []
       }
+      tab_activity: {
+        Row: {
+          archived_at: string | null
+          created_at: string | null
+          domain: string | null
+          favicon_url: string | null
+          first_visited_at: string | null
+          id: string
+          is_archived: boolean | null
+          last_visited_at: string | null
+          title: string | null
+          updated_at: string | null
+          url: string
+          user_id: string
+          visit_count: number | null
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string | null
+          domain?: string | null
+          favicon_url?: string | null
+          first_visited_at?: string | null
+          id?: string
+          is_archived?: boolean | null
+          last_visited_at?: string | null
+          title?: string | null
+          updated_at?: string | null
+          url: string
+          user_id: string
+          visit_count?: number | null
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string | null
+          domain?: string | null
+          favicon_url?: string | null
+          first_visited_at?: string | null
+          id?: string
+          is_archived?: boolean | null
+          last_visited_at?: string | null
+          title?: string | null
+          updated_at?: string | null
+          url?: string
+          user_id?: string
+          visit_count?: number | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
