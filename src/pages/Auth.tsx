@@ -3,11 +3,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Brain, ArrowLeft, Mail } from "lucide-react";
+import { Brain, ArrowLeft, Mail, AlertTriangle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
+import { usePasswordCheck } from "@/hooks/usePasswordCheck";
 
 type AuthMode = "signin" | "signup" | "forgot";
 
@@ -30,8 +31,10 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string }>({});
+  const [passwordBreached, setPasswordBreached] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { checkPasswordBreached, isChecking } = usePasswordCheck();
 
   useEffect(() => {
     // Check if user is already logged in
@@ -108,6 +111,20 @@ const Auth = () => {
         });
         setMode("signin");
       } else if (mode === "signup") {
+        // Check password against HaveIBeenPwned before signup
+        const breachResult = await checkPasswordBreached(password);
+        if (breachResult.breached) {
+          setPasswordBreached(true);
+          const breachCount = breachResult.count?.toLocaleString() || "multiple";
+          toast({
+            title: "⚠️ Compromised Password Detected",
+            description: `This password has appeared in ${breachCount} data breaches. Please choose a different password.`,
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
+        }
+
         const { error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
@@ -248,22 +265,31 @@ const Auth = () => {
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);
+                      setPasswordBreached(false);
                       if (errors.password) setErrors(prev => ({ ...prev, password: undefined }));
                     }}
-                    className={errors.password ? "border-destructive" : ""}
+                    className={errors.password || passwordBreached ? "border-destructive" : ""}
                   />
                   {errors.password && (
                     <p className="text-sm text-destructive">{errors.password}</p>
+                  )}
+                  {passwordBreached && mode === "signup" && (
+                    <div className="flex items-start gap-2 p-3 rounded-md bg-destructive/10 border border-destructive/20">
+                      <AlertTriangle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-destructive">
+                        This password has been exposed in data breaches. Please choose a stronger, unique password.
+                      </p>
+                    </div>
                   )}
                 </div>
               )}
               <Button
                 type="submit"
                 className="w-full bg-gradient-hero hover:opacity-90 transition-opacity"
-                disabled={loading}
+                disabled={loading || isChecking}
               >
-                {loading
-                  ? "Loading..."
+                {loading || isChecking
+                  ? isChecking ? "Checking password security..." : "Loading..."
                   : mode === "signup"
                   ? "Create Account"
                   : mode === "forgot"
