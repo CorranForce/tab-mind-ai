@@ -6,6 +6,7 @@ import { Brain, Users, Mail, Download, ArrowLeft, Loader2, Shield } from "lucide
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAdminRole } from "@/hooks/useAdminRole";
 import {
   Table,
   TableBody,
@@ -25,42 +26,32 @@ interface WaitlistEntry {
 const Admin = () => {
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [checking, setChecking] = useState(true);
+  const { isAdmin, loading: checkingAdmin } = useAdminRole();
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    checkAdminAccess();
-  }, []);
-
-  const checkAdminAccess = async () => {
-    try {
+    const checkAuth = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         navigate("/auth");
-        return;
       }
+    };
+    checkAuth();
+  }, [navigate]);
 
-      // Check if user is admin by email
-      if (user.email === "corranforce@gmail.com") {
-        setIsAdmin(true);
-        loadWaitlist();
-      } else {
-        toast({
-          title: "Access Denied",
-          description: "You don't have permission to access this page.",
-          variant: "destructive",
-        });
-        navigate("/dashboard");
-      }
-    } catch (error) {
-      console.error("Error checking admin access:", error);
+  useEffect(() => {
+    if (!checkingAdmin && isAdmin) {
+      loadWaitlist();
+    } else if (!checkingAdmin && !isAdmin) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have permission to access this page.",
+        variant: "destructive",
+      });
       navigate("/dashboard");
-    } finally {
-      setChecking(false);
     }
-  };
+  }, [isAdmin, checkingAdmin, navigate, toast]);
 
   const loadWaitlist = async () => {
     try {
@@ -107,7 +98,7 @@ const Admin = () => {
     });
   };
 
-  if (checking) {
+  if (checkingAdmin) {
     return (
       <div className="min-h-screen bg-gradient-subtle flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />

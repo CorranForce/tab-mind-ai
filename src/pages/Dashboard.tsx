@@ -11,6 +11,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAdminRole } from "@/hooks/useAdminRole";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,7 +85,7 @@ const Dashboard = () => {
   const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistLoading, setWaitlistLoading] = useState(false);
   const [waitlistJoined, setWaitlistJoined] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { isAdmin } = useAdminRole();
   const upgradeEmailSentRef = useRef(false);
 
   useEffect(() => {
@@ -105,9 +106,6 @@ const Dashboard = () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       navigate("/auth");
-    } else {
-      // Check if user is admin
-      setIsAdmin(session.user.email === "corranforce@gmail.com");
     }
   };
 
