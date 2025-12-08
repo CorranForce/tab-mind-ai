@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.send-trial-expiry-reminder]
 verify_jwt = false
+
+[functions.create-setup-intent]
+verify_jwt = false
+
+[functions.save-payment-method]
+verify_jwt = false

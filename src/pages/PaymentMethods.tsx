@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Brain, CreditCard, Trash2, Plus, ArrowLeft } from "lucide-react";
+import { Brain, CreditCard, Trash2, Plus, ArrowLeft, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,14 +16,141 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { loadStripe } from "@stripe/stripe-js";
+import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "");
+
+const cardElementOptions = {
+  style: {
+    base: {
+      fontSize: "16px",
+      color: "hsl(var(--foreground))",
+      "::placeholder": {
+        color: "hsl(var(--muted-foreground))",
+      },
+      backgroundColor: "transparent",
+    },
+    invalid: {
+      color: "hsl(var(--destructive))",
+    },
+  },
+};
+
+interface PaymentMethod {
+  id: string;
+  card_brand: string | null;
+  card_last4: string | null;
+  card_exp_month: number | null;
+  card_exp_year: number | null;
+  stripe_payment_method_id: string | null;
+}
+
+const AddCardForm = ({ onSuccess }: { onSuccess: () => void }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Get SetupIntent from backend
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const { data: setupData, error: setupError } = await supabase.functions.invoke(
+        "create-setup-intent",
+        {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }
+      );
+
+      if (setupError || !setupData?.clientSecret) {
+        throw new Error(setupError?.message || "Failed to create setup intent");
+      }
+
+      // Confirm card setup with Stripe
+      const cardElement = elements.getElement(CardElement);
+      if (!cardElement) throw new Error("Card element not found");
+
+      const { error: stripeError, setupIntent } = await stripe.confirmCardSetup(
+        setupData.clientSecret,
+        {
+          payment_method: { card: cardElement },
+        }
+      );
+
+      if (stripeError) {
+        throw new Error(stripeError.message);
+      }
+
+      if (!setupIntent?.payment_method) {
+        throw new Error("No payment method created");
+      }
+
+      // Save payment method to database via edge function
+      const { error: saveError } = await supabase.functions.invoke(
+        "save-payment-method",
+        {
+          body: { paymentMethodId: setupIntent.payment_method },
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }
+      );
+
+      if (saveError) {
+        throw new Error(saveError.message || "Failed to save payment method");
+      }
+
+      toast({
+        title: "Success",
+        description: "Payment method added successfully",
+      });
+
+      cardElement.clear();
+      onSuccess();
+    } catch (err: any) {
+      const message = err.message || "An error occurred";
+      setError(message);
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="p-3 border border-border rounded-md bg-background">
+        <CardElement options={cardElementOptions} />
+      </div>
+      {error && <p className="text-sm text-destructive">{error}</p>}
+      <Button type="submit" disabled={!stripe || loading} className="w-full">
+        {loading ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Adding...
+          </>
+        ) : (
+          "Add Card"
+        )}
+      </Button>
+    </form>
+  );
+};
 
 const PaymentMethods = () => {
-  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
-  const [addingCard, setAddingCard] = useState(false);
-  const [cardNumber, setCardNumber] = useState("");
-  const [expMonth, setExpMonth] = useState("");
-  const [expYear, setExpYear] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -61,48 +186,6 @@ const PaymentMethods = () => {
     }
   };
 
-  const handleAddCard = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAddingCard(true);
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const last4 = cardNumber.slice(-4);
-      const brand = detectCardBrand(cardNumber);
-
-      const { error } = await supabase.from("payment_methods").insert({
-        user_id: user.id,
-        card_last4: last4,
-        card_brand: brand,
-        card_exp_month: parseInt(expMonth),
-        card_exp_year: parseInt(expYear),
-        is_default: paymentMethods.length === 0,
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Payment method added successfully",
-      });
-
-      setCardNumber("");
-      setExpMonth("");
-      setExpYear("");
-      fetchPaymentMethods();
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setAddingCard(false);
-    }
-  };
-
   const handleDeleteCard = async (id: string) => {
     try {
       const { error } = await supabase
@@ -125,13 +208,6 @@ const PaymentMethods = () => {
         variant: "destructive",
       });
     }
-  };
-
-  const detectCardBrand = (number: string) => {
-    if (number.startsWith("4")) return "Visa";
-    if (number.startsWith("5")) return "Mastercard";
-    if (number.startsWith("3")) return "Amex";
-    return "Unknown";
   };
 
   return (
@@ -166,52 +242,12 @@ const PaymentMethods = () => {
                 <Plus className="w-5 h-5" />
                 Add Payment Method
               </CardTitle>
-              <CardDescription>Add a new credit or debit card</CardDescription>
+              <CardDescription>Add a new credit or debit card securely via Stripe</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleAddCard} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="cardNumber">Card Number</Label>
-                  <Input
-                    id="cardNumber"
-                    type="text"
-                    placeholder="4242 4242 4242 4242"
-                    value={cardNumber}
-                    onChange={(e) => setCardNumber(e.target.value.replace(/\s/g, ""))}
-                    maxLength={16}
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="expMonth">Exp. Month</Label>
-                    <Input
-                      id="expMonth"
-                      type="text"
-                      placeholder="MM"
-                      value={expMonth}
-                      onChange={(e) => setExpMonth(e.target.value)}
-                      maxLength={2}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="expYear">Exp. Year</Label>
-                    <Input
-                      id="expYear"
-                      type="text"
-                      placeholder="YYYY"
-                      value={expYear}
-                      onChange={(e) => setExpYear(e.target.value)}
-                      maxLength={4}
-                      required
-                    />
-                  </div>
-                </div>
-                <Button type="submit" disabled={addingCard} className="w-full">
-                  {addingCard ? "Adding..." : "Add Card"}
-                </Button>
-              </form>
+              <Elements stripe={stripePromise}>
+                <AddCardForm onSuccess={fetchPaymentMethods} />
+              </Elements>
             </CardContent>
           </Card>
 
@@ -224,7 +260,10 @@ const PaymentMethods = () => {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <p className="text-muted-foreground">Loading...</p>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading...
+                </div>
               ) : paymentMethods.length === 0 ? (
                 <p className="text-muted-foreground">No payment methods saved</p>
               ) : (
@@ -237,8 +276,8 @@ const PaymentMethods = () => {
                       <div className="flex items-center gap-4">
                         <CreditCard className="w-5 h-5 text-muted-foreground" />
                         <div>
-                          <p className="font-medium">
-                            {method.card_brand} •••• {method.card_last4}
+                          <p className="font-medium capitalize">
+                            {method.card_brand || "Card"} •••• {method.card_last4}
                           </p>
                           <p className="text-sm text-muted-foreground">
                             Expires {method.card_exp_month}/{method.card_exp_year}
