@@ -7,6 +7,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAdminRole } from "@/hooks/useAdminRole";
+import { SubscriptionManager } from "@/components/admin/SubscriptionManager";
 import {
   Table,
   TableBody,
@@ -181,8 +182,11 @@ const Admin = () => {
           </Card>
         </div>
 
+        {/* Subscription Management */}
+        <SubscriptionManager />
+
         {/* Waitlist Table */}
-        <Card className="shadow-card">
+        <Card className="shadow-card mt-8">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
