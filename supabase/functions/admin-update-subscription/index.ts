@@ -49,12 +49,14 @@ serve(async (req) => {
     logStep("Admin role verified");
 
     // Parse request body
-    const { userId, action } = await req.json();
+    const { userId, action, billingDate } = await req.json();
     if (!userId) throw new Error("userId is required");
-    if (!action || !["grant_pro", "revoke_pro"].includes(action)) {
-      throw new Error("Invalid action. Must be 'grant_pro' or 'revoke_pro'");
+    
+    const validActions = ["grant_pro", "revoke_pro", "update_billing_date"];
+    if (!action || !validActions.includes(action)) {
+      throw new Error(`Invalid action. Must be one of: ${validActions.join(", ")}`);
     }
-    logStep("Request parsed", { userId, action });
+    logStep("Request parsed", { userId, action, billingDate });
 
     if (action === "grant_pro") {
       // Grant pro access - set to active with 100 year subscription
@@ -71,6 +73,7 @@ serve(async (req) => {
 
       if (updateError) throw new Error(`Update error: ${updateError.message}`);
       logStep("Pro access granted", { userId });
+      
     } else if (action === "revoke_pro") {
       // Revoke pro access - set back to expired
       const { error: updateError } = await supabaseClient
@@ -86,6 +89,26 @@ serve(async (req) => {
 
       if (updateError) throw new Error(`Update error: ${updateError.message}`);
       logStep("Pro access revoked", { userId });
+      
+    } else if (action === "update_billing_date") {
+      if (!billingDate) throw new Error("billingDate is required for update_billing_date action");
+      
+      // Parse and validate the date
+      const newBillingDate = new Date(billingDate);
+      if (isNaN(newBillingDate.getTime())) {
+        throw new Error("Invalid billingDate format");
+      }
+      
+      // Update the billing/subscription end date
+      const { error: updateError } = await supabaseClient
+        .from("subscriptions")
+        .update({
+          current_period_end: newBillingDate.toISOString(),
+        })
+        .eq("user_id", userId);
+
+      if (updateError) throw new Error(`Update error: ${updateError.message}`);
+      logStep("Billing date updated", { userId, newBillingDate: newBillingDate.toISOString() });
     }
 
     return new Response(JSON.stringify({ success: true }), {
