@@ -39,11 +39,41 @@ serve(async (req) => {
     if (!user?.email) throw new Error("User not authenticated or email not available");
     logStep("User authenticated", { userId: user.id, email: user.email });
 
+    // First check database for manually granted subscriptions (admin-granted pro access)
+    const { data: dbSubscription, error: dbError } = await supabaseClient
+      .from("subscriptions")
+      .select("status, current_period_end, stripe_subscription_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (dbError) {
+      logStep("Database subscription check error", { error: dbError.message });
+    }
+
+    // If user has active status in DB without a Stripe subscription ID, it's admin-granted
+    if (dbSubscription?.status === "active" && !dbSubscription.stripe_subscription_id) {
+      logStep("Admin-granted subscription found", { 
+        status: dbSubscription.status, 
+        currentPeriodEnd: dbSubscription.current_period_end 
+      });
+      
+      // For admin-granted subs, use a special product ID to indicate pro access
+      return new Response(JSON.stringify({
+        subscribed: true,
+        product_id: "prod_TVVAI2BQPBNmIf", // Pro product ID
+        subscription_end: dbSubscription.current_period_end
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // Otherwise, check Stripe for paid subscriptions
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
     
     if (customers.data.length === 0) {
-      logStep("No customer found");
+      logStep("No Stripe customer found");
       return new Response(JSON.stringify({ subscribed: false }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -67,9 +97,9 @@ serve(async (req) => {
       const subscription = subscriptions.data[0];
       subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
       productId = subscription.items.data[0].price.product;
-      logStep("Active subscription found", { subscriptionId: subscription.id, productId });
+      logStep("Active Stripe subscription found", { subscriptionId: subscription.id, productId });
     } else {
-      logStep("No active subscription found");
+      logStep("No active Stripe subscription found");
     }
 
     return new Response(JSON.stringify({
