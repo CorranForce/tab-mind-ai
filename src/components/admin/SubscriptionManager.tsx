@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Crown, Loader2, Search, UserCheck, UserX, Calendar, Activity, Users } from "lucide-react";
+import { Crown, Loader2, Search, UserCheck, UserX, Calendar, Activity, Users, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -33,7 +33,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -55,6 +54,7 @@ interface UserSubscription {
   last_sign_in_at: string | null;
   last_activity: string | null;
   is_active: boolean;
+  stripe_subscription_id: string | null;
 }
 
 type FilterType = "all" | "active" | "inactive" | "pro" | "trial" | "expired";
@@ -68,6 +68,7 @@ export const SubscriptionManager = () => {
   const [billingDialogOpen, setBillingDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserSubscription | null>(null);
   const [newBillingDate, setNewBillingDate] = useState("");
+  const [retryingPayment, setRetryingPayment] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -184,6 +185,41 @@ export const SubscriptionManager = () => {
     setSelectedUser(user);
     setNewBillingDate(user.current_period_end?.split("T")[0] || "");
     setBillingDialogOpen(true);
+  };
+
+  const retryPayment = async (user: UserSubscription) => {
+    if (!user.stripe_subscription_id) {
+      toast({
+        title: "Cannot Retry",
+        description: "This user does not have a Stripe subscription.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setRetryingPayment(user.user_id);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-retry-payment", {
+        body: { userId: user.user_id },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Payment Retried",
+        description: data.message || "Payment retry initiated successfully.",
+      });
+      loadUsers();
+    } catch (error: any) {
+      console.error("Error retrying payment:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to retry payment.",
+        variant: "destructive",
+      });
+    } finally {
+      setRetryingPayment(null);
+    }
   };
 
   const filteredUsers = users.filter((user) => {
@@ -368,6 +404,23 @@ export const SubscriptionManager = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
+                        {/* Retry Payment Button */}
+                        {user.stripe_subscription_id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => retryPayment(user)}
+                            disabled={retryingPayment === user.user_id}
+                            title="Retry payment"
+                          >
+                            {retryingPayment === user.user_id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                          </Button>
+                        )}
+                        
                         {/* Billing Date Button */}
                         {user.status === "active" && (
                           <Button
