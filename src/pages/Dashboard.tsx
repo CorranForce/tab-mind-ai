@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { AdminAccountManagerCard } from "@/components/admin/AdminAccountManagerCard";
+import { AdminRevenueCard } from "@/components/admin/AdminRevenueCard";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -329,8 +330,13 @@ const Dashboard = () => {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Left Column - Tab Lists */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Admin Account Manager Card */}
-            {isAdmin && <AdminAccountManagerCard />}
+            {/* Admin Cards */}
+            {isAdmin && (
+              <div className="grid md:grid-cols-2 gap-4">
+                <AdminRevenueCard />
+                <AdminAccountManagerCard />
+              </div>
+            )}
             
             <Card className="shadow-card">
               <CardHeader>

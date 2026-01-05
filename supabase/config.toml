@@ -23,3 +23,9 @@ verify_jwt = false
 
 [functions.save-payment-method]
 verify_jwt = false
+
+[functions.admin-retry-payment]
+verify_jwt = false
+
+[functions.admin-get-revenue]
+verify_jwt = false

@@ -51,7 +51,7 @@ serve(async (req) => {
     // Get all users with their subscriptions and profiles
     const { data: subscriptions, error: subError } = await supabaseClient
       .from("subscriptions")
-      .select("user_id, status, trial_ends_at, current_period_end, current_period_start, created_at");
+      .select("user_id, status, trial_ends_at, current_period_end, current_period_start, created_at, stripe_subscription_id");
 
     if (subError) throw new Error(`Subscriptions query error: ${subError.message}`);
     logStep("Subscriptions loaded", { count: subscriptions?.length });
@@ -102,6 +102,7 @@ serve(async (req) => {
         last_sign_in_at: authUser?.last_sign_in_at || null,
         last_activity: lastActivity || null,
         is_active: isActive,
+        stripe_subscription_id: sub.stripe_subscription_id || null,
       };
     }) || [];
 
