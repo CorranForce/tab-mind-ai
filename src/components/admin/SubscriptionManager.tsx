@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Crown, Loader2, Search, UserCheck, UserX, Calendar, Activity, Users, RefreshCw } from "lucide-react";
+import { Crown, Loader2, Search, UserCheck, UserX, Calendar, Activity, Users, RefreshCw, Edit, Shield, DollarSign } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -55,6 +55,7 @@ interface UserSubscription {
   last_activity: string | null;
   is_active: boolean;
   stripe_subscription_id: string | null;
+  is_admin?: boolean;
 }
 
 type FilterType = "all" | "active" | "inactive" | "pro" | "trial" | "expired";
@@ -69,6 +70,10 @@ export const SubscriptionManager = () => {
   const [selectedUser, setSelectedUser] = useState<UserSubscription | null>(null);
   const [newBillingDate, setNewBillingDate] = useState("");
   const [retryingPayment, setRetryingPayment] = useState<string | null>(null);
+  const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
+  const [editUserPrice, setEditUserPrice] = useState("");
+  const [editUserStatus, setEditUserStatus] = useState("");
+  const [editUserBillingDate, setEditUserBillingDate] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -187,6 +192,63 @@ export const SubscriptionManager = () => {
     setBillingDialogOpen(true);
   };
 
+  const openEditUserDialog = (user: UserSubscription) => {
+    setSelectedUser(user);
+    setEditUserPrice("");
+    setEditUserStatus(user.status);
+    setEditUserBillingDate(user.current_period_end?.split("T")[0] || "");
+    setEditUserDialogOpen(true);
+  };
+
+  const saveUserEdits = async () => {
+    if (!selectedUser) return;
+    
+    setUpdatingUser(selectedUser.user_id);
+    try {
+      // Update billing date if changed
+      if (editUserBillingDate && editUserBillingDate !== selectedUser.current_period_end?.split("T")[0]) {
+        const { error } = await supabase.functions.invoke("admin-update-subscription", {
+          body: { 
+            userId: selectedUser.user_id, 
+            action: "update_billing_date",
+            billingDate: editUserBillingDate 
+          },
+        });
+        if (error) throw error;
+      }
+
+      // Update status if changed
+      if (editUserStatus && editUserStatus !== selectedUser.status) {
+        if (editUserStatus === "active" && selectedUser.status !== "active") {
+          await supabase.functions.invoke("admin-update-subscription", {
+            body: { userId: selectedUser.user_id, action: "grant_pro" },
+          });
+        } else if (editUserStatus !== "active" && selectedUser.status === "active") {
+          await supabase.functions.invoke("admin-update-subscription", {
+            body: { userId: selectedUser.user_id, action: "revoke_pro" },
+          });
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: "User subscription updated successfully.",
+      });
+      setEditUserDialogOpen(false);
+      setSelectedUser(null);
+      loadUsers();
+    } catch (error: any) {
+      console.error("Error updating user:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update user subscription.",
+        variant: "destructive",
+      });
+    } finally {
+      setUpdatingUser(null);
+    }
+  };
+
   const retryPayment = async (user: UserSubscription) => {
     if (!user.stripe_subscription_id) {
       toast({
@@ -247,19 +309,38 @@ export const SubscriptionManager = () => {
     }
   });
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "active":
-        return <Badge className="bg-green-500/10 text-green-500 border-green-500/20">Pro</Badge>;
-      case "trial":
-        return <Badge variant="secondary">Trial</Badge>;
-      case "expired":
-        return <Badge variant="destructive">Expired</Badge>;
-      case "cancelled":
-        return <Badge variant="outline">Cancelled</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+  const getStatusBadge = (user: UserSubscription) => {
+    const badges = [];
+    
+    // Show Owner badge for admins
+    if (user.is_admin) {
+      badges.push(
+        <Badge key="owner" className="bg-purple-500/10 text-purple-500 border-purple-500/20">
+          <Shield className="w-3 h-3 mr-1" />
+          Owner
+        </Badge>
+      );
     }
+    
+    // Show subscription status
+    switch (user.status) {
+      case "active":
+        badges.push(<Badge key="status" className="bg-green-500/10 text-green-500 border-green-500/20">Pro</Badge>);
+        break;
+      case "trial":
+        badges.push(<Badge key="status" variant="secondary">Trial</Badge>);
+        break;
+      case "expired":
+        badges.push(<Badge key="status" variant="destructive">Expired</Badge>);
+        break;
+      case "cancelled":
+        badges.push(<Badge key="status" variant="outline">Cancelled</Badge>);
+        break;
+      default:
+        badges.push(<Badge key="status" variant="outline">{user.status}</Badge>);
+    }
+    
+    return <div className="flex gap-1 flex-wrap">{badges}</div>;
   };
 
   const getActivityBadge = (isActive: boolean) => {
@@ -387,7 +468,11 @@ export const SubscriptionManager = () => {
               </TableHeader>
               <TableBody>
                 {filteredUsers.map((user) => (
-                  <TableRow key={user.user_id}>
+                  <TableRow 
+                    key={user.user_id} 
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => openEditUserDialog(user)}
+                  >
                     <TableCell>
                       <div>
                         <p className="font-medium">{user.full_name || "No name"}</p>
@@ -395,7 +480,7 @@ export const SubscriptionManager = () => {
                       </div>
                     </TableCell>
                     <TableCell>{getActivityBadge(user.is_active)}</TableCell>
-                    <TableCell>{getStatusBadge(user.status)}</TableCell>
+                    <TableCell>{getStatusBadge(user)}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {formatRelativeTime(user.last_activity)}
                     </TableCell>
@@ -403,7 +488,17 @@ export const SubscriptionManager = () => {
                       {formatDate(user.current_period_end)}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                        {/* Edit User Button */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditUserDialog(user)}
+                          title="Edit user"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        
                         {/* Retry Payment Button */}
                         {user.stripe_subscription_id && (
                           <Button
@@ -418,18 +513,6 @@ export const SubscriptionManager = () => {
                             ) : (
                               <RefreshCw className="w-4 h-4" />
                             )}
-                          </Button>
-                        )}
-                        
-                        {/* Billing Date Button */}
-                        {user.status === "active" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openBillingDialog(user)}
-                            title="Edit billing date"
-                          >
-                            <Calendar className="w-4 h-4" />
                           </Button>
                         )}
                         
@@ -525,6 +608,95 @@ export const SubscriptionManager = () => {
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 ) : null}
                 Update Date
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit User Dialog - Centered Modal */}
+        <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit className="w-5 h-5" />
+                Edit User Subscription
+              </DialogTitle>
+              <DialogDescription>
+                Manage subscription details for {selectedUser?.email}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              {/* User Info */}
+              <div className="p-3 rounded-lg bg-muted/50">
+                <p className="font-medium">{selectedUser?.full_name || "No name"}</p>
+                <p className="text-sm text-muted-foreground">{selectedUser?.email}</p>
+                {selectedUser?.is_admin && (
+                  <Badge className="mt-2 bg-purple-500/10 text-purple-500 border-purple-500/20">
+                    <Shield className="w-3 h-3 mr-1" />
+                    Owner
+                  </Badge>
+                )}
+              </div>
+
+              {/* Subscription Status */}
+              <div className="space-y-2">
+                <Label htmlFor="editStatus">Subscription Status</Label>
+                <Select value={editUserStatus} onValueChange={setEditUserStatus}>
+                  <SelectTrigger id="editStatus">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Pro (Active)</SelectItem>
+                    <SelectItem value="trial">Trial</SelectItem>
+                    <SelectItem value="expired">Expired</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Billing Date */}
+              <div className="space-y-2">
+                <Label htmlFor="editBillingDate">Next Billing Date</Label>
+                <Input
+                  id="editBillingDate"
+                  type="date"
+                  value={editUserBillingDate}
+                  onChange={(e) => setEditUserBillingDate(e.target.value)}
+                />
+              </div>
+
+              {/* Custom Price (optional) */}
+              <div className="space-y-2">
+                <Label htmlFor="editPrice" className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  Custom Price (optional)
+                </Label>
+                <Input
+                  id="editPrice"
+                  type="text"
+                  placeholder="e.g., 9.99"
+                  value={editUserPrice}
+                  onChange={(e) => setEditUserPrice(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to use default pricing. Note: Custom pricing requires Stripe configuration.
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setEditUserDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={saveUserEdits} 
+                disabled={updatingUser === selectedUser?.user_id}
+              >
+                {updatingUser === selectedUser?.user_id ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : null}
+                Save Changes
               </Button>
             </DialogFooter>
           </DialogContent>

@@ -67,6 +67,16 @@ serve(async (req) => {
 
     if (profileError) throw new Error(`Profiles query error: ${profileError.message}`);
 
+    // Get admin roles
+    const { data: adminRoles, error: rolesError } = await supabaseClient
+      .from("user_roles")
+      .select("user_id, role")
+      .eq("role", "admin");
+
+    if (rolesError) {
+      logStep("Roles query error (non-fatal)", { error: rolesError.message });
+    }
+
     // Get latest tab activity per user to determine activity status
     const { data: tabActivity, error: tabError } = await supabaseClient
       .from("tab_activity")
@@ -81,6 +91,7 @@ serve(async (req) => {
     const usersWithSubs = subscriptions?.map((sub) => {
       const authUser = authUsers.users.find((u) => u.id === sub.user_id);
       const profile = profiles?.find((p) => p.id === sub.user_id);
+      const isAdmin = adminRoles?.some((r) => r.user_id === sub.user_id) || false;
       
       // Find most recent activity for this user
       const userActivity = tabActivity?.find((t) => t.user_id === sub.user_id);
@@ -103,6 +114,7 @@ serve(async (req) => {
         last_activity: lastActivity || null,
         is_active: isActive,
         stripe_subscription_id: sub.stripe_subscription_id || null,
+        is_admin: isAdmin,
       };
     }) || [];
 
