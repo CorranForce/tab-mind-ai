@@ -330,12 +330,35 @@ const Dashboard = () => {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* Left Column - Tab Lists */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Admin Cards */}
+          {/* Admin Dashboard Link */}
             {isAdmin && (
-              <div className="grid md:grid-cols-2 gap-4">
-                <AdminRevenueCard />
-                <AdminAccountManagerCard />
-              </div>
+              <Card className="shadow-card border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5 mb-6">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Shield className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-lg">Admin Dashboard</CardTitle>
+                        <CardDescription>Manage users, subscriptions & revenue</CardDescription>
+                      </div>
+                    </div>
+                    <Link to="/admin">
+                      <Button>
+                        <Settings className="w-4 h-4 mr-2" />
+                        Open Admin
+                      </Button>
+                    </Link>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="grid grid-cols-2 gap-4">
+                    <AdminRevenueCard />
+                    <AdminAccountManagerCard />
+                  </div>
+                </CardContent>
+              </Card>
             )}
             
             <Card className="shadow-card">
