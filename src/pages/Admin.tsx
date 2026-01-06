@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { SubscriptionManager } from "@/components/admin/SubscriptionManager";
+import { AdminRevenueCard } from "@/components/admin/AdminRevenueCard";
 import {
   Table,
   TableBody,
@@ -180,6 +181,11 @@ const Admin = () => {
               </p>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Revenue Overview */}
+        <div className="mb-8">
+          <AdminRevenueCard />
         </div>
 
         {/* Subscription Management */}
