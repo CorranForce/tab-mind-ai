@@ -193,39 +193,21 @@ serve(async (req) => {
           logStep("Custom price saved to database", { customPrice });
         }
       } else {
-        // Create a new subscription with the custom price - use allow_incomplete to create immediately
-        const subscription = await stripe.subscriptions.create({
-          customer: customerId,
-          items: [{ price: customStripePrice.id }],
-          payment_behavior: "allow_incomplete",
-        });
-        
-        // Build update object with safe date handling
-        const updateData: Record<string, any> = {
-          stripe_subscription_id: subscription.id,
-          status: "active",
-          custom_price: parseFloat(customPrice),
-        };
-        
-        // Only set period dates if they exist
-        if (subscription.current_period_start) {
-          updateData.current_period_start = new Date(subscription.current_period_start * 1000).toISOString();
-        }
-        if (subscription.current_period_end) {
-          updateData.current_period_end = new Date(subscription.current_period_end * 1000).toISOString();
-        }
-        
-        // Update local database with new subscription and custom price
+        // No existing Stripe subscription - just save the custom price to the database
+        // Don't try to create a Stripe subscription as the user may not have a payment method
+        // The custom price will be applied when/if they subscribe through normal checkout
         const { error: updateError } = await supabaseClient
           .from("subscriptions")
-          .update(updateData)
+          .update({ 
+            custom_price: parseFloat(customPrice),
+            status: "active",
+          })
           .eq("user_id", userId);
         
-        if (updateError) throw new Error(`Error updating local subscription: ${updateError.message}`);
-        logStep("Created new Stripe subscription with custom price", { 
-          subscriptionId: subscription.id,
-          priceId: customStripePrice.id,
-          customPrice
+        if (updateError) throw new Error(`Error updating subscription: ${updateError.message}`);
+        logStep("Saved custom price to database (no Stripe subscription)", { 
+          customPrice,
+          stripePrice: customStripePrice.id 
         });
       }
     }
