@@ -193,23 +193,32 @@ serve(async (req) => {
           logStep("Custom price saved to database", { customPrice });
         }
       } else {
-        // Create a new subscription with the custom price
+        // Create a new subscription with the custom price - use allow_incomplete to create immediately
         const subscription = await stripe.subscriptions.create({
           customer: customerId,
           items: [{ price: customStripePrice.id }],
-          payment_behavior: "default_incomplete",
+          payment_behavior: "allow_incomplete",
         });
+        
+        // Build update object with safe date handling
+        const updateData: Record<string, any> = {
+          stripe_subscription_id: subscription.id,
+          status: "active",
+          custom_price: parseFloat(customPrice),
+        };
+        
+        // Only set period dates if they exist
+        if (subscription.current_period_start) {
+          updateData.current_period_start = new Date(subscription.current_period_start * 1000).toISOString();
+        }
+        if (subscription.current_period_end) {
+          updateData.current_period_end = new Date(subscription.current_period_end * 1000).toISOString();
+        }
         
         // Update local database with new subscription and custom price
         const { error: updateError } = await supabaseClient
           .from("subscriptions")
-          .update({
-            stripe_subscription_id: subscription.id,
-            status: "active",
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-            custom_price: parseFloat(customPrice),
-          })
+          .update(updateData)
           .eq("user_id", userId);
         
         if (updateError) throw new Error(`Error updating local subscription: ${updateError.message}`);
