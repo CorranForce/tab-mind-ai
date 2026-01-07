@@ -180,6 +180,18 @@ serve(async (req) => {
             newPriceId: customStripePrice.id 
           });
         }
+        
+        // Save custom price to database
+        const { error: priceUpdateError } = await supabaseClient
+          .from("subscriptions")
+          .update({ custom_price: parseFloat(customPrice) })
+          .eq("user_id", userId);
+        
+        if (priceUpdateError) {
+          logStep("Error saving custom price to database", { error: priceUpdateError.message });
+        } else {
+          logStep("Custom price saved to database", { customPrice });
+        }
       } else {
         // Create a new subscription with the custom price
         const subscription = await stripe.subscriptions.create({
@@ -188,7 +200,7 @@ serve(async (req) => {
           payment_behavior: "default_incomplete",
         });
         
-        // Update local database with new subscription
+        // Update local database with new subscription and custom price
         const { error: updateError } = await supabaseClient
           .from("subscriptions")
           .update({
@@ -196,13 +208,15 @@ serve(async (req) => {
             status: "active",
             current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
             current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            custom_price: parseFloat(customPrice),
           })
           .eq("user_id", userId);
         
         if (updateError) throw new Error(`Error updating local subscription: ${updateError.message}`);
         logStep("Created new Stripe subscription with custom price", { 
           subscriptionId: subscription.id,
-          priceId: customStripePrice.id 
+          priceId: customStripePrice.id,
+          customPrice
         });
       }
     }

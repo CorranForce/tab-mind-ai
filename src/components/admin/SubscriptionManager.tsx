@@ -56,6 +56,7 @@ interface UserSubscription {
   is_active: boolean;
   stripe_subscription_id: string | null;
   is_admin?: boolean;
+  custom_price?: number | null;
 }
 
 type FilterType = "all" | "active" | "inactive" | "pro" | "trial" | "expired";
@@ -194,7 +195,7 @@ export const SubscriptionManager = () => {
 
   const openEditUserDialog = (user: UserSubscription) => {
     setSelectedUser(user);
-    setEditUserPrice("");
+    setEditUserPrice(user.custom_price ? user.custom_price.toString() : "");
     setEditUserStatus(user.status);
     setEditUserBillingDate(user.current_period_end?.split("T")[0] || "");
     setEditUserDialogOpen(true);
@@ -354,6 +355,16 @@ export const SubscriptionManager = () => {
         break;
       default:
         badges.push(<Badge key="status" variant="outline">{user.status}</Badge>);
+    }
+    
+    // Show custom price if set
+    if (user.custom_price) {
+      badges.push(
+        <Badge key="price" className="bg-blue-500/10 text-blue-500 border-blue-500/20">
+          <DollarSign className="w-3 h-3 mr-0.5" />
+          {user.custom_price}/mo
+        </Badge>
+      );
     }
     
     return <div className="flex gap-1 flex-wrap">{badges}</div>;
