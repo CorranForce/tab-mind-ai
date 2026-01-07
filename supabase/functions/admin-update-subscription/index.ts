@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +19,10 @@ serve(async (req) => {
 
   try {
     logStep("Function started");
+
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -49,14 +54,20 @@ serve(async (req) => {
     logStep("Admin role verified");
 
     // Parse request body
-    const { userId, action, billingDate } = await req.json();
+    const { userId, action, billingDate, customPrice } = await req.json();
     if (!userId) throw new Error("userId is required");
     
-    const validActions = ["grant_pro", "revoke_pro", "update_billing_date"];
+    const validActions = ["grant_pro", "revoke_pro", "update_billing_date", "update_custom_price"];
     if (!action || !validActions.includes(action)) {
       throw new Error(`Invalid action. Must be one of: ${validActions.join(", ")}`);
     }
-    logStep("Request parsed", { userId, action, billingDate });
+    logStep("Request parsed", { userId, action, billingDate, customPrice });
+
+    // Get user's email for Stripe operations
+    const { data: targetUser, error: targetUserError } = await supabaseClient.auth.admin.getUserById(userId);
+    if (targetUserError) throw new Error(`Error fetching target user: ${targetUserError.message}`);
+    const userEmail = targetUser.user?.email;
+    logStep("Target user email", { email: userEmail });
 
     if (action === "grant_pro") {
       // Grant pro access - set to active with 100 year subscription
@@ -109,6 +120,91 @@ serve(async (req) => {
 
       if (updateError) throw new Error(`Update error: ${updateError.message}`);
       logStep("Billing date updated", { userId, newBillingDate: newBillingDate.toISOString() });
+      
+    } else if (action === "update_custom_price") {
+      if (!customPrice) throw new Error("customPrice is required for update_custom_price action");
+      if (!userEmail) throw new Error("User email not found");
+      
+      const priceInCents = Math.round(parseFloat(customPrice) * 100);
+      if (isNaN(priceInCents) || priceInCents <= 0) {
+        throw new Error("Invalid custom price. Must be a positive number.");
+      }
+      logStep("Custom price in cents", { priceInCents });
+
+      // Find or create Stripe customer
+      const customers = await stripe.customers.list({ email: userEmail, limit: 1 });
+      let customerId: string;
+      if (customers.data.length > 0) {
+        customerId = customers.data[0].id;
+        logStep("Found existing Stripe customer", { customerId });
+      } else {
+        const newCustomer = await stripe.customers.create({ email: userEmail });
+        customerId = newCustomer.id;
+        logStep("Created new Stripe customer", { customerId });
+      }
+
+      // Get user's current subscription from database
+      const { data: subData, error: subError } = await supabaseClient
+        .from("subscriptions")
+        .select("stripe_subscription_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      
+      if (subError) throw new Error(`Error fetching subscription: ${subError.message}`);
+
+      // Create a custom price in Stripe
+      const customStripePrice = await stripe.prices.create({
+        unit_amount: priceInCents,
+        currency: "usd",
+        recurring: { interval: "month" },
+        product: "prod_TVVAI2BQPBNmIf", // Use existing Pro product
+        nickname: `Custom price for ${userEmail}`,
+      });
+      logStep("Created custom Stripe price", { priceId: customStripePrice.id });
+
+      if (subData?.stripe_subscription_id) {
+        // Update existing Stripe subscription with new price
+        const subscription = await stripe.subscriptions.retrieve(subData.stripe_subscription_id);
+        const subscriptionItemId = subscription.items.data[0]?.id;
+        
+        if (subscriptionItemId) {
+          await stripe.subscriptions.update(subData.stripe_subscription_id, {
+            items: [{
+              id: subscriptionItemId,
+              price: customStripePrice.id,
+            }],
+            proration_behavior: "none",
+          });
+          logStep("Updated Stripe subscription with custom price", { 
+            subscriptionId: subData.stripe_subscription_id,
+            newPriceId: customStripePrice.id 
+          });
+        }
+      } else {
+        // Create a new subscription with the custom price
+        const subscription = await stripe.subscriptions.create({
+          customer: customerId,
+          items: [{ price: customStripePrice.id }],
+          payment_behavior: "default_incomplete",
+        });
+        
+        // Update local database with new subscription
+        const { error: updateError } = await supabaseClient
+          .from("subscriptions")
+          .update({
+            stripe_subscription_id: subscription.id,
+            status: "active",
+            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+          })
+          .eq("user_id", userId);
+        
+        if (updateError) throw new Error(`Error updating local subscription: ${updateError.message}`);
+        logStep("Created new Stripe subscription with custom price", { 
+          subscriptionId: subscription.id,
+          priceId: customStripePrice.id 
+        });
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), {

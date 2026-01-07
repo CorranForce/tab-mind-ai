@@ -205,6 +205,22 @@ export const SubscriptionManager = () => {
     
     setUpdatingUser(selectedUser.user_id);
     try {
+      // Update custom price if provided
+      if (editUserPrice && parseFloat(editUserPrice) > 0) {
+        const { error } = await supabase.functions.invoke("admin-update-subscription", {
+          body: { 
+            userId: selectedUser.user_id, 
+            action: "update_custom_price",
+            customPrice: editUserPrice 
+          },
+        });
+        if (error) throw error;
+        toast({
+          title: "Custom Price Applied",
+          description: `Custom price of $${editUserPrice}/month has been set in Stripe.`,
+        });
+      }
+
       // Update billing date if changed
       if (editUserBillingDate && editUserBillingDate !== selectedUser.current_period_end?.split("T")[0]) {
         const { error } = await supabase.functions.invoke("admin-update-subscription", {
@@ -241,7 +257,7 @@ export const SubscriptionManager = () => {
       console.error("Error updating user:", error);
       toast({
         title: "Error",
-        description: "Failed to update user subscription.",
+        description: error.message || "Failed to update user subscription.",
         variant: "destructive",
       });
     } finally {
@@ -670,17 +686,23 @@ export const SubscriptionManager = () => {
               <div className="space-y-2">
                 <Label htmlFor="editPrice" className="flex items-center gap-2">
                   <DollarSign className="w-4 h-4" />
-                  Custom Price (optional)
+                  Custom Monthly Price (USD)
                 </Label>
-                <Input
-                  id="editPrice"
-                  type="text"
-                  placeholder="e.g., 9.99"
-                  value={editUserPrice}
-                  onChange={(e) => setEditUserPrice(e.target.value)}
-                />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                  <Input
+                    id="editPrice"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="9.99"
+                    value={editUserPrice}
+                    onChange={(e) => setEditUserPrice(e.target.value)}
+                    className="pl-7"
+                  />
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  Leave empty to use default pricing. Note: Custom pricing requires Stripe configuration.
+                  Creates a custom Stripe price and updates the user's subscription. Leave empty to keep current pricing.
                 </p>
               </div>
             </div>
