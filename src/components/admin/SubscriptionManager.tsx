@@ -57,6 +57,7 @@ interface UserSubscription {
   stripe_subscription_id: string | null;
   is_admin?: boolean;
   custom_price?: number | null;
+  billing_interval?: string | null;
 }
 
 type FilterType = "all" | "active" | "inactive" | "pro" | "trial" | "expired";
@@ -697,7 +698,7 @@ export const SubscriptionManager = () => {
               <div className="space-y-2">
                 <Label htmlFor="editPrice" className="flex items-center gap-2">
                   <DollarSign className="w-4 h-4" />
-                  Custom Monthly Price (USD)
+                  Custom {selectedUser?.billing_interval === 'year' ? 'Yearly' : 'Monthly'} Price (USD)
                 </Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
@@ -706,14 +707,17 @@ export const SubscriptionManager = () => {
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="9.99"
+                    placeholder={selectedUser?.custom_price ? selectedUser.custom_price.toString() : "9.99"}
                     value={editUserPrice}
                     onChange={(e) => setEditUserPrice(e.target.value)}
                     className="pl-7"
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Creates a custom Stripe price and updates the user's subscription. Leave empty to keep current pricing.
+                  {selectedUser?.custom_price 
+                    ? `Current custom price: $${selectedUser.custom_price}/${selectedUser?.billing_interval === 'year' ? 'year' : 'month'}`
+                    : `Creates a custom Stripe price and updates the user's subscription. Leave empty to keep current pricing.`
+                  }
                 </p>
               </div>
             </div>

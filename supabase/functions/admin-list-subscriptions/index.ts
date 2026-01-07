@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import Stripe from "https://esm.sh/stripe@18.5.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,8 +88,15 @@ serve(async (req) => {
       logStep("Tab activity query error (non-fatal)", { error: tabError.message });
     }
 
-    // Map subscriptions with user data
-    const usersWithSubs = subscriptions?.map((sub) => {
+    // Initialize Stripe to fetch billing intervals
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    let stripe: Stripe | null = null;
+    if (stripeKey) {
+      stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    }
+
+    // Map subscriptions with user data - need to use Promise.all for async Stripe calls
+    const usersWithSubs = await Promise.all((subscriptions || []).map(async (sub) => {
       const authUser = authUsers.users.find((u) => u.id === sub.user_id);
       const profile = profiles?.find((p) => p.id === sub.user_id);
       const isAdmin = adminRoles?.some((r) => r.user_id === sub.user_id) || false;
@@ -100,6 +108,18 @@ serve(async (req) => {
       const lastActivity = userActivity?.last_visited_at || authUser?.last_sign_in_at;
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const isActive = lastActivity ? new Date(lastActivity) > sevenDaysAgo : false;
+
+      // Fetch billing interval from Stripe if subscription exists
+      let billingInterval: string | null = null;
+      if (stripe && sub.stripe_subscription_id) {
+        try {
+          const stripeSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
+          billingInterval = stripeSub.items.data[0]?.price?.recurring?.interval || null;
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          logStep("Error fetching Stripe subscription", { subscriptionId: sub.stripe_subscription_id, error: errorMsg });
+        }
+      }
 
       return {
         user_id: sub.user_id,
@@ -116,8 +136,9 @@ serve(async (req) => {
         stripe_subscription_id: sub.stripe_subscription_id || null,
         is_admin: isAdmin,
         custom_price: sub.custom_price || null,
+        billing_interval: billingInterval,
       };
-    }) || [];
+    }));
 
     // Sort by last activity (most recent first)
     usersWithSubs.sort((a, b) => {
