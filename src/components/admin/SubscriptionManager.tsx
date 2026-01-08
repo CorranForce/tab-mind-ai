@@ -713,12 +713,49 @@ export const SubscriptionManager = () => {
                     className="pl-7"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {selectedUser?.custom_price 
-                    ? `Current custom price: $${selectedUser.custom_price}/${selectedUser?.billing_interval === 'year' ? 'year' : 'month'}`
-                    : `Creates a custom Stripe price and updates the user's subscription. Leave empty to keep current pricing.`
-                  }
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {selectedUser?.custom_price 
+                      ? `Current custom price: $${selectedUser.custom_price}/${selectedUser?.billing_interval === 'year' ? 'year' : 'month'}`
+                      : `Creates a custom Stripe price and updates the user's subscription. Leave empty to keep current pricing.`
+                    }
+                  </p>
+                  {selectedUser?.custom_price && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10 h-auto py-1 px-2 text-xs"
+                      onClick={async () => {
+                        if (!selectedUser) return;
+                        setUpdatingUser(selectedUser.user_id);
+                        try {
+                          const { error } = await supabase.functions.invoke("admin-update-subscription", {
+                            body: { userId: selectedUser.user_id, action: "clear_custom_price" },
+                          });
+                          if (error) throw error;
+                          toast({
+                            title: "Custom Price Cleared",
+                            description: "User has been reverted to standard pricing.",
+                          });
+                          setEditUserDialogOpen(false);
+                          loadUsers();
+                        } catch (error: any) {
+                          toast({
+                            title: "Error",
+                            description: error.message || "Failed to clear custom price.",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setUpdatingUser(null);
+                        }
+                      }}
+                      disabled={updatingUser === selectedUser?.user_id}
+                    >
+                      Clear Custom Price
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
