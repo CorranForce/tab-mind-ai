@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Crown, Loader2, Search, UserCheck, UserX, Calendar, Activity, Users, RefreshCw, Edit, Shield, DollarSign } from "lucide-react";
+import { Crown, Loader2, Search, UserCheck, UserX, Calendar, Activity, Users, RefreshCw, Edit, Shield, DollarSign, CheckCircle, XCircle, MinusCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -58,15 +58,18 @@ interface UserSubscription {
   is_admin?: boolean;
   custom_price?: number | null;
   billing_interval?: string | null;
+  payment_status?: string | null;
 }
 
 type FilterType = "all" | "active" | "inactive" | "pro" | "trial" | "expired";
+type PaymentFilterType = "all" | "succeeded" | "failed";
 
 export const SubscriptionManager = () => {
   const [users, setUsers] = useState<UserSubscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<FilterType>("all");
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilterType>("all");
   const [updatingUser, setUpdatingUser] = useState<string | null>(null);
   const [billingDialogOpen, setBillingDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserSubscription | null>(null);
@@ -310,6 +313,12 @@ export const SubscriptionManager = () => {
     
     if (!matchesSearch) return false;
 
+    // Payment filter
+    if (paymentFilter !== "all") {
+      if (paymentFilter === "succeeded" && user.payment_status !== "succeeded") return false;
+      if (paymentFilter === "failed" && user.payment_status !== "failed") return false;
+    }
+
     // Filter by type
     switch (filterType) {
       case "active":
@@ -482,6 +491,16 @@ export const SubscriptionManager = () => {
                 <SelectItem value="expired">Expired</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={paymentFilter} onValueChange={(v) => setPaymentFilter(v as PaymentFilterType)}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Payment Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Payments</SelectItem>
+                <SelectItem value="succeeded">Successful</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </CardHeader>
@@ -504,6 +523,7 @@ export const SubscriptionManager = () => {
                   <TableHead>Subscription</TableHead>
                   <TableHead>Last Active</TableHead>
                   <TableHead>Billing Ends</TableHead>
+                  <TableHead>Payment</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -527,6 +547,26 @@ export const SubscriptionManager = () => {
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {formatDate(user.current_period_end)}
+                    </TableCell>
+                    <TableCell>
+                      {user.payment_status === "succeeded" ? (
+                        <Badge className="bg-green-500/10 text-green-500 border-green-500/20">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Paid
+                        </Badge>
+                      ) : user.payment_status === "failed" ? (
+                        <Badge variant="destructive">
+                          <XCircle className="w-3 h-3 mr-1" />
+                          Failed
+                        </Badge>
+                      ) : user.stripe_subscription_id ? (
+                        <Badge variant="outline" className="text-muted-foreground">
+                          <MinusCircle className="w-3 h-3 mr-1" />
+                          Pending
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
