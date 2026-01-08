@@ -14,6 +14,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { AdminAccountManagerCard } from "@/components/admin/AdminAccountManagerCard";
 import { AdminRevenueCard } from "@/components/admin/AdminRevenueCard";
+import { PlatformOwnerOrProCard } from "@/components/PlatformOwnerOrProCard";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -639,51 +640,12 @@ const Dashboard = () => {
             </Card>
 
             {isPro && (
-              <Card className="shadow-card border-primary/20">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Crown className="w-5 h-5 text-primary" />
-                    Pro Subscription
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                      <p className="text-sm font-medium mb-1">Active Plan</p>
-                      <p className="text-sm text-muted-foreground">
-                        SmartTab AI Pro
-                      </p>
-                    </div>
-                    {subscriptionEnd && (
-                      <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                        <p className="text-sm font-medium mb-1">Next Billing</p>
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(subscriptionEnd).toLocaleDateString()}
-                        </p>
-                      </div>
-                    )}
-                    <Button 
-                      variant="outline" 
-                      className="w-full" 
-                      size="sm"
-                      onClick={handleManageSubscription}
-                      disabled={portalLoading}
-                    >
-                      {portalLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Loading...
-                        </>
-                      ) : (
-                        <>
-                          <Settings className="w-4 h-4 mr-2" />
-                          Manage Subscription
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+              <PlatformOwnerOrProCard 
+                isAdmin={isAdmin}
+                subscriptionEnd={subscriptionEnd}
+                portalLoading={portalLoading}
+                handleManageSubscription={handleManageSubscription}
+              />
             )}
 
             {!loading && !isPro && subscription && subscription.status === "trial" && (
