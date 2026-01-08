@@ -57,7 +57,7 @@ serve(async (req) => {
     const { userId, action, billingDate, customPrice } = await req.json();
     if (!userId) throw new Error("userId is required");
     
-    const validActions = ["grant_pro", "revoke_pro", "update_billing_date", "update_custom_price"];
+    const validActions = ["grant_pro", "revoke_pro", "update_billing_date", "update_custom_price", "clear_custom_price"];
     if (!action || !validActions.includes(action)) {
       throw new Error(`Invalid action. Must be one of: ${validActions.join(", ")}`);
     }
@@ -210,6 +210,63 @@ serve(async (req) => {
           stripePrice: customStripePrice.id 
         });
       }
+    } else if (action === "clear_custom_price") {
+      if (!userEmail) throw new Error("User email not found");
+      
+      // Get user's current subscription from database
+      const { data: subData, error: subError } = await supabaseClient
+        .from("subscriptions")
+        .select("stripe_subscription_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      
+      if (subError) throw new Error(`Error fetching subscription: ${subError.message}`);
+
+      if (subData?.stripe_subscription_id) {
+        // Get the default product price from Stripe
+        const subscription = await stripe.subscriptions.retrieve(subData.stripe_subscription_id);
+        const currentInterval = subscription.items.data[0]?.price?.recurring?.interval || "month";
+        
+        // Fetch the default price for the Pro product (prod_TVVAI2BQPBNmIf)
+        const prices = await stripe.prices.list({
+          product: "prod_TVVAI2BQPBNmIf",
+          active: true,
+          recurring: { interval: currentInterval },
+          limit: 10,
+        });
+        
+        // Find the standard price (one without "Custom" in nickname)
+        const standardPrice = prices.data.find((p: Stripe.Price) => !p.nickname?.includes("Custom"));
+        
+        if (standardPrice) {
+          const subscriptionItemId = subscription.items.data[0]?.id;
+          
+          if (subscriptionItemId) {
+            await stripe.subscriptions.update(subData.stripe_subscription_id, {
+              items: [{
+                id: subscriptionItemId,
+                price: standardPrice.id,
+              }],
+              proration_behavior: "none",
+            });
+            logStep("Reverted Stripe subscription to standard price", { 
+              subscriptionId: subData.stripe_subscription_id,
+              standardPriceId: standardPrice.id 
+            });
+          }
+        } else {
+          logStep("No standard price found, only clearing database custom_price");
+        }
+      }
+      
+      // Clear custom price from database
+      const { error: updateError } = await supabaseClient
+        .from("subscriptions")
+        .update({ custom_price: null })
+        .eq("user_id", userId);
+      
+      if (updateError) throw new Error(`Error clearing custom price: ${updateError.message}`);
+      logStep("Custom price cleared from database", { userId });
     }
 
     return new Response(JSON.stringify({ success: true }), {
