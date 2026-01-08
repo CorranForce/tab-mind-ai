@@ -109,12 +109,30 @@ serve(async (req) => {
       const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
       const isActive = lastActivity ? new Date(lastActivity) > sevenDaysAgo : false;
 
-      // Fetch billing interval from Stripe if subscription exists
+      // Fetch billing interval and payment status from Stripe if subscription exists
       let billingInterval: string | null = null;
+      let paymentStatus: string | null = null;
       if (stripe && sub.stripe_subscription_id) {
         try {
-          const stripeSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
+          const stripeSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id, {
+            expand: ['latest_invoice']
+          });
           billingInterval = stripeSub.items.data[0]?.price?.recurring?.interval || null;
+          
+          // Get payment status from latest invoice
+          const latestInvoice = stripeSub.latest_invoice;
+          if (latestInvoice && typeof latestInvoice === 'object') {
+            const invoiceStatus = latestInvoice.status;
+            if (invoiceStatus === 'paid') {
+              paymentStatus = 'succeeded';
+            } else if (invoiceStatus === 'open' || invoiceStatus === 'uncollectible') {
+              paymentStatus = 'failed';
+            } else if (invoiceStatus === 'draft' || invoiceStatus === 'void') {
+              paymentStatus = 'pending';
+            } else {
+              paymentStatus = invoiceStatus;
+            }
+          }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           logStep("Error fetching Stripe subscription", { subscriptionId: sub.stripe_subscription_id, error: errorMsg });
@@ -137,6 +155,7 @@ serve(async (req) => {
         is_admin: isAdmin,
         custom_price: sub.custom_price || null,
         billing_interval: billingInterval,
+        payment_status: paymentStatus,
       };
     }));
 
