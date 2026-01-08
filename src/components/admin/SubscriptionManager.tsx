@@ -330,7 +330,20 @@ export const SubscriptionManager = () => {
   const getStatusBadge = (user: UserSubscription) => {
     const badges = [];
     
-    // Show Owner badge for admins
+    // Platform Owner - special case for corranforce@gmail.com
+    const isPlatformOwner = user.email === "corranforce@gmail.com";
+    
+    if (isPlatformOwner) {
+      badges.push(
+        <Badge key="owner" className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
+          <Shield className="w-3 h-3 mr-1" />
+          Platform-Owner
+        </Badge>
+      );
+      return <div className="flex gap-1 flex-wrap">{badges}</div>;
+    }
+    
+    // Show Owner badge for other admins
     if (user.is_admin) {
       badges.push(
         <Badge key="owner" className="bg-purple-500/10 text-purple-500 border-purple-500/20">
