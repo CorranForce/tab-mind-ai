@@ -38,6 +38,39 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
+// Mock data for testing
+const generateMockData = (): AnalyticsData => {
+  const chartData: DailyStats[] = [];
+  const today = new Date();
+  
+  for (let i = 29; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i);
+    const succeeded = Math.floor(Math.random() * 15) + 5;
+    const failed = Math.random() > 0.85 ? Math.floor(Math.random() * 3) + 1 : 0;
+    chartData.push({
+      date: date.toISOString().split('T')[0],
+      succeeded,
+      failed,
+    });
+  }
+  
+  const totals = chartData.reduce(
+    (acc, day) => ({
+      succeeded: acc.succeeded + day.succeeded,
+      failed: acc.failed + day.failed,
+    }),
+    { succeeded: 0, failed: 0 }
+  );
+  
+  const successRate = Math.round((totals.succeeded / (totals.succeeded + totals.failed)) * 100);
+  
+  return { chartData, totals, successRate };
+};
+
+// Set to true to use mock data for testing
+const USE_MOCK_DATA = true;
+
 export const PaymentAnalyticsChart = () => {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,6 +79,13 @@ export const PaymentAnalyticsChart = () => {
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
+      if (USE_MOCK_DATA) {
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setData(generateMockData());
+        return;
+      }
+
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData.session) throw new Error("Not authenticated");
 
