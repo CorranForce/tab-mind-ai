@@ -15,12 +15,34 @@ interface RevenueData {
   currency: string;
 }
 
+// Toggle this to switch between mock and real data
+const USE_MOCK_DATA = true;
+
+const generateMockRevenueData = (): RevenueData => ({
+  availableBalance: 12450.75,
+  pendingBalance: 3280.50,
+  monthlyRevenue: 8750.00,
+  mrr: 6200.00,
+  activeSubscriptions: 47,
+  recentPayments: 89,
+  currency: "USD",
+});
+
 export const AdminRevenueCard = () => {
   const [data, setData] = useState<RevenueData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchRevenue = async () => {
     setLoading(true);
+    
+    if (USE_MOCK_DATA) {
+      // Simulate network delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setData(generateMockRevenueData());
+      setLoading(false);
+      return;
+    }
+    
     try {
       const { data: revenueData, error } = await supabase.functions.invoke("admin-get-revenue");
       if (error) throw error;
