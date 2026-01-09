@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAdminRole } from "@/hooks/useAdminRole";
 import { SubscriptionManager } from "@/components/admin/SubscriptionManager";
 import { AdminRevenueCard } from "@/components/admin/AdminRevenueCard";
+import { PaymentAnalyticsChart } from "@/components/admin/PaymentAnalyticsChart";
 import {
   Table,
   TableBody,
@@ -184,8 +185,9 @@ const Admin = () => {
         </div>
 
         {/* Revenue Overview */}
-        <div className="mb-8">
+        <div className="grid md:grid-cols-2 gap-6 mb-8">
           <AdminRevenueCard />
+          <PaymentAnalyticsChart />
         </div>
 
         {/* Subscription Management */}
