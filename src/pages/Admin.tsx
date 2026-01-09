@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Users, Mail, Download, ArrowLeft, Loader2, Shield } from "lucide-react";
+import { Brain, Users, Mail, Download, ArrowLeft, Loader2, Shield, FlaskConical } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -10,6 +10,9 @@ import { useAdminRole } from "@/hooks/useAdminRole";
 import { SubscriptionManager } from "@/components/admin/SubscriptionManager";
 import { AdminRevenueCard } from "@/components/admin/AdminRevenueCard";
 import { PaymentAnalyticsChart } from "@/components/admin/PaymentAnalyticsChart";
+import { MockDataProvider, useMockData } from "@/contexts/MockDataContext";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -26,7 +29,7 @@ interface WaitlistEntry {
   user_id: string | null;
 }
 
-const Admin = () => {
+const AdminContent = () => {
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const { isAdmin, loading: checkingAdmin } = useAdminRole();
@@ -113,6 +116,8 @@ const Admin = () => {
     return null;
   }
 
+  const { useMockData: isMockData, setUseMockData } = useMockData();
+
   return (
     <div className="min-h-screen bg-gradient-subtle">
       {/* Header */}
@@ -128,12 +133,26 @@ const Admin = () => {
               Admin
             </Badge>
           </Link>
-          <Link to="/dashboard">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Button>
-          </Link>
+          <div className="flex items-center gap-4">
+            {/* Mock Data Toggle */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50">
+              <FlaskConical className={`w-4 h-4 ${isMockData ? "text-amber-500" : "text-muted-foreground"}`} />
+              <Label htmlFor="mock-toggle" className="text-sm font-medium cursor-pointer">
+                Test Data
+              </Label>
+              <Switch
+                id="mock-toggle"
+                checked={isMockData}
+                onCheckedChange={setUseMockData}
+              />
+            </div>
+            <Link to="/dashboard">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Dashboard
+              </Button>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -246,6 +265,14 @@ const Admin = () => {
         </Card>
       </div>
     </div>
+  );
+};
+
+const Admin = () => {
+  return (
+    <MockDataProvider>
+      <AdminContent />
+    </MockDataProvider>
   );
 };
 

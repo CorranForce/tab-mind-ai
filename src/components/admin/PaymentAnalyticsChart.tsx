@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { RefreshCw, TrendingUp, TrendingDown, CheckCircle, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useMockData } from "@/contexts/MockDataContext";
 import {
   ChartConfig,
   ChartContainer,
@@ -13,7 +14,7 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line } from "recharts";
+import { BarChart, Bar, XAxis, YAxis } from "recharts";
 
 interface DailyStats {
   date: string;
@@ -68,10 +69,8 @@ const generateMockData = (): AnalyticsData => {
   return { chartData, totals, successRate };
 };
 
-// Set to true to use mock data for testing
-const USE_MOCK_DATA = true;
-
 export const PaymentAnalyticsChart = () => {
+  const { useMockData: isMockData } = useMockData();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -79,7 +78,7 @@ export const PaymentAnalyticsChart = () => {
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
-      if (USE_MOCK_DATA) {
+      if (isMockData) {
         // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 500));
         setData(generateMockData());
@@ -111,7 +110,7 @@ export const PaymentAnalyticsChart = () => {
 
   useEffect(() => {
     fetchAnalytics();
-  }, []);
+  }, [isMockData]);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);

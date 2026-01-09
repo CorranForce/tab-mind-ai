@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Crown, Loader2, Search, UserCheck, UserX, Calendar, Activity, Users, RefreshCw, Edit, Shield, DollarSign, CheckCircle, XCircle, MinusCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useMockData } from "@/contexts/MockDataContext";
 import {
   Table,
   TableBody,
@@ -124,10 +125,8 @@ const generateMockUsers = (): UserSubscription[] => {
   return mockUsers;
 };
 
-// Set to true to use mock data for testing
-const USE_MOCK_DATA = true;
-
 export const SubscriptionManager = () => {
+  const { useMockData: isMockData, setMockUserCount } = useMockData();
   const [users, setUsers] = useState<UserSubscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -144,17 +143,16 @@ export const SubscriptionManager = () => {
   const [editUserBillingDate, setEditUserBillingDate] = useState("");
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
   const loadUsers = async () => {
     setLoading(true);
     try {
-      if (USE_MOCK_DATA) {
+      if (isMockData) {
         // Simulate network delay
         await new Promise(resolve => setTimeout(resolve, 500));
-        setUsers(generateMockUsers());
+        const mockUsers = generateMockUsers();
+        setUsers(mockUsers);
+        // Update the context with user count so other components can sync
+        setMockUserCount(mockUsers.length);
         return;
       }
 
@@ -162,6 +160,7 @@ export const SubscriptionManager = () => {
 
       if (error) throw error;
       setUsers(data.users || []);
+      setMockUserCount(data.users?.length || 0);
     } catch (error: any) {
       console.error("Error loading users:", error);
       toast({
@@ -173,6 +172,10 @@ export const SubscriptionManager = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadUsers();
+  }, [isMockData]);
 
   const grantProAccess = async (userId: string) => {
     setUpdatingUser(userId);
