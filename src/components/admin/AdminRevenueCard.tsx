@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { DollarSign, TrendingUp, CreditCard, Users, RefreshCw, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useMockData } from "@/contexts/MockDataContext";
 
 interface RevenueData {
   availableBalance: number;
@@ -15,30 +16,30 @@ interface RevenueData {
   currency: string;
 }
 
-// Toggle this to switch between mock and real data
-const USE_MOCK_DATA = true;
-
-const generateMockRevenueData = (): RevenueData => ({
+const generateMockRevenueData = (activeSubscriptions: number): RevenueData => ({
   availableBalance: 12450.75,
   pendingBalance: 3280.50,
   monthlyRevenue: 8750.00,
-  mrr: 6200.00,
-  activeSubscriptions: 47,
-  recentPayments: 89,
+  mrr: activeSubscriptions * 9.99, // Calculate MRR based on subscription count
+  activeSubscriptions,
+  recentPayments: Math.floor(activeSubscriptions * 1.8),
   currency: "USD",
 });
 
 export const AdminRevenueCard = () => {
+  const { useMockData: isMockData, mockUserCount } = useMockData();
   const [data, setData] = useState<RevenueData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchRevenue = async () => {
     setLoading(true);
     
-    if (USE_MOCK_DATA) {
+    if (isMockData) {
       // Simulate network delay
       await new Promise(resolve => setTimeout(resolve, 500));
-      setData(generateMockRevenueData());
+      // Calculate active subs as ~50% of total mock users
+      const activeCount = Math.floor(mockUserCount * 0.5);
+      setData(generateMockRevenueData(activeCount));
       setLoading(false);
       return;
     }
@@ -57,7 +58,7 @@ export const AdminRevenueCard = () => {
 
   useEffect(() => {
     fetchRevenue();
-  }, []);
+  }, [isMockData, mockUserCount]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
