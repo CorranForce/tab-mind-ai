@@ -64,6 +64,69 @@ interface UserSubscription {
 type FilterType = "all" | "active" | "inactive" | "pro" | "trial" | "expired";
 type PaymentFilterType = "all" | "succeeded" | "failed";
 
+// Mock data for testing
+const generateMockUsers = (): UserSubscription[] => {
+  const statuses = ["active", "trial", "expired", "cancelled"];
+  const paymentStatuses = ["succeeded", "failed", null, "succeeded", "succeeded"];
+  const names = [
+    "Alice Johnson", "Bob Smith", "Carol Williams", "David Brown", "Eva Martinez",
+    "Frank Garcia", "Grace Lee", "Henry Wilson", "Ivy Chen", "Jack Taylor",
+    "Kate Anderson", "Leo Thomas", "Maria Rodriguez", "Nathan White", "Olivia Harris"
+  ];
+  
+  const mockUsers: UserSubscription[] = [
+    {
+      user_id: "owner-001",
+      email: "corranforce@gmail.com",
+      full_name: "Platform Owner",
+      status: "active",
+      trial_ends_at: null,
+      current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      current_period_start: new Date().toISOString(),
+      created_at: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString(),
+      last_sign_in_at: new Date().toISOString(),
+      last_activity: new Date().toISOString(),
+      is_active: true,
+      stripe_subscription_id: "sub_owner",
+      is_admin: true,
+      custom_price: null,
+      billing_interval: "year",
+      payment_status: "succeeded",
+    }
+  ];
+  
+  for (let i = 0; i < 14; i++) {
+    const status = statuses[Math.floor(Math.random() * statuses.length)];
+    const isActive = Math.random() > 0.3;
+    const daysAgo = Math.floor(Math.random() * 60);
+    const paymentStatus = status === "active" ? paymentStatuses[Math.floor(Math.random() * paymentStatuses.length)] : null;
+    
+    mockUsers.push({
+      user_id: `user-${i + 1}`,
+      email: `${names[i].toLowerCase().replace(' ', '.')}@example.com`,
+      full_name: names[i],
+      status,
+      trial_ends_at: status === "trial" ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
+      current_period_end: status === "active" ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null,
+      current_period_start: status === "active" ? new Date().toISOString() : null,
+      created_at: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString(),
+      last_sign_in_at: isActive ? new Date(Date.now() - Math.floor(Math.random() * 5) * 24 * 60 * 60 * 1000).toISOString() : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      last_activity: isActive ? new Date(Date.now() - Math.floor(Math.random() * 5) * 24 * 60 * 60 * 1000).toISOString() : null,
+      is_active: isActive,
+      stripe_subscription_id: status === "active" ? `sub_${i}` : null,
+      is_admin: false,
+      custom_price: Math.random() > 0.85 ? Math.floor(Math.random() * 5 + 3) : null,
+      billing_interval: status === "active" ? (Math.random() > 0.7 ? "year" : "month") : null,
+      payment_status: paymentStatus,
+    });
+  }
+  
+  return mockUsers;
+};
+
+// Set to true to use mock data for testing
+const USE_MOCK_DATA = true;
+
 export const SubscriptionManager = () => {
   const [users, setUsers] = useState<UserSubscription[]>([]);
   const [loading, setLoading] = useState(true);
@@ -88,6 +151,13 @@ export const SubscriptionManager = () => {
   const loadUsers = async () => {
     setLoading(true);
     try {
+      if (USE_MOCK_DATA) {
+        // Simulate network delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        setUsers(generateMockUsers());
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("admin-list-subscriptions");
 
       if (error) throw error;
