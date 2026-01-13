@@ -22,8 +22,15 @@ export const MockDataProvider = ({ children }: { children: ReactNode }) => {
 
 export const useMockData = () => {
   const context = useContext(MockDataContext);
+  // Return default values when used outside provider (e.g., on Dashboard)
+  // This allows components to work in both Admin (with toggle) and Dashboard (live data only)
   if (context === undefined) {
-    throw new Error("useMockData must be used within a MockDataProvider");
+    return {
+      useMockData: false,
+      setUseMockData: () => {},
+      mockUserCount: 0,
+      setMockUserCount: () => {},
+    };
   }
   return context;
 };
