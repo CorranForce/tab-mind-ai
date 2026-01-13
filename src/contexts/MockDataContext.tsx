@@ -10,8 +10,16 @@ interface MockDataContextType {
 const MockDataContext = createContext<MockDataContextType | undefined>(undefined);
 
 export const MockDataProvider = ({ children }: { children: ReactNode }) => {
-  const [useMockData, setUseMockData] = useState(true);
-  const [mockUserCount, setMockUserCount] = useState(15); // Default mock user count
+  const [useMockData, setUseMockDataState] = useState(() => {
+    const stored = localStorage.getItem('admin-use-mock-data');
+    return stored !== null ? stored === 'true' : true;
+  });
+  const [mockUserCount, setMockUserCount] = useState(15);
+
+  const setUseMockData = (value: boolean) => {
+    localStorage.setItem('admin-use-mock-data', String(value));
+    setUseMockDataState(value);
+  };
 
   return (
     <MockDataContext.Provider value={{ useMockData, setUseMockData, mockUserCount, setMockUserCount }}>
