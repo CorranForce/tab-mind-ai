@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Mail, Check, Shield } from "lucide-react";
+import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Mail, Check, Shield, FlaskConical } from "lucide-react";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { TrialCountdown } from "@/components/TrialCountdown";
 import { FeatureComparisonModal } from "@/components/FeatureComparisonModal";
@@ -15,6 +15,9 @@ import { useAdminRole } from "@/hooks/useAdminRole";
 import { AdminAccountManagerCard } from "@/components/admin/AdminAccountManagerCard";
 import { AdminRevenueCard } from "@/components/admin/AdminRevenueCard";
 import { PlatformOwnerOrProCard } from "@/components/PlatformOwnerOrProCard";
+import { MockDataProvider, useMockData } from "@/contexts/MockDataContext";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -74,7 +77,7 @@ const mockArchivedTabs = [
   { id: 8, title: "Tutorial Video", url: "https://youtube.com", archivedDate: "1 week ago" },
 ];
 
-const Dashboard = () => {
+const DashboardContent = () => {
   const [activeView, setActiveView] = useState<"recommendations" | "recent" | "archived">("recommendations");
   const [subscription, setSubscription] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -333,33 +336,7 @@ const Dashboard = () => {
           <div className="lg:col-span-2 space-y-6">
           {/* Admin Dashboard Link */}
             {isAdmin && (
-              <Card className="shadow-card border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5 mb-6">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Shield className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-lg">Admin Dashboard</CardTitle>
-                        <CardDescription>Manage users, subscriptions & revenue</CardDescription>
-                      </div>
-                    </div>
-                    <Link to="/admin">
-                      <Button>
-                        <Settings className="w-4 h-4 mr-2" />
-                        Open Admin
-                      </Button>
-                    </Link>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="grid grid-cols-2 gap-4">
-                    <AdminRevenueCard />
-                    <AdminAccountManagerCard />
-                  </div>
-                </CardContent>
-              </Card>
+              <AdminDashboardSection />
             )}
             
             <Card className="shadow-card">
@@ -736,6 +713,62 @@ const Dashboard = () => {
         highlightFeature="AI Recommendations"
       />
     </div>
+  );
+};
+
+// Admin Dashboard Section with mock data toggle
+const AdminDashboardSection = () => {
+  const { useMockData: isMockData, setUseMockData } = useMockData();
+  
+  return (
+    <Card className="shadow-card border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5 mb-6">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Shield className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">Admin Dashboard</CardTitle>
+              <CardDescription>Manage users, subscriptions & revenue</CardDescription>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <FlaskConical className={`w-4 h-4 ${isMockData ? 'text-primary' : 'text-muted-foreground'}`} />
+              <Label htmlFor="mock-data-toggle" className="text-sm text-muted-foreground">
+                Test Data
+              </Label>
+              <Switch
+                id="mock-data-toggle"
+                checked={isMockData}
+                onCheckedChange={setUseMockData}
+              />
+            </div>
+            <Link to="/admin">
+              <Button>
+                <Settings className="w-4 h-4 mr-2" />
+                Open Admin
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-0">
+        <div className="grid grid-cols-2 gap-4">
+          <AdminRevenueCard />
+          <AdminAccountManagerCard />
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
+const Dashboard = () => {
+  return (
+    <MockDataProvider>
+      <DashboardContent />
+    </MockDataProvider>
   );
 };
 
