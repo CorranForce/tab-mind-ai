@@ -6,6 +6,10 @@ export const STRIPE_PRODUCTS = {
     price_id: "price_1SYUAcKq904QPKp45gvjL9Cg",
     product_id: "prod_TVVAI2BQPBNmIf",
   },
+  enterprise: {
+    price_id: "price_1Sp9WrKq904QPKp4Qy5SjPgK",
+    product_id: "prod_TmiyEYIcZaZgby",
+  },
 };
 
 interface SubscriptionState {
@@ -76,10 +80,12 @@ export const useSubscription = () => {
   };
 
   const isPro = subscription.subscribed && subscription.productId === STRIPE_PRODUCTS.pro.product_id;
+  const isEnterprise = subscription.subscribed && subscription.productId === STRIPE_PRODUCTS.enterprise.product_id;
 
   return {
     ...subscription,
     isPro,
+    isEnterprise,
     checkSubscription,
     createCheckout,
     openCustomerPortal,

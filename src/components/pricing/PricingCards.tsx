@@ -7,6 +7,7 @@ import { Link } from "react-router-dom";
 interface PricingCardsProps {
   isAuthenticated: boolean;
   isPro: boolean;
+  isEnterprise: boolean;
   subscriptionLoading: boolean;
   checkoutLoading: string | null;
   onSubscribe: (planName: string) => void;
@@ -15,6 +16,7 @@ interface PricingCardsProps {
 export const PricingCards = ({
   isAuthenticated,
   isPro,
+  isEnterprise,
   subscriptionLoading,
   checkoutLoading,
   onSubscribe,
@@ -61,8 +63,8 @@ export const PricingCards = ({
     },
     {
       name: "Enterprise",
-      price: "Custom",
-      period: "contact sales",
+      price: "$99",
+      period: "per month",
       description: "For teams and organizations",
       features: [
         "Everything in Pro",
@@ -74,11 +76,11 @@ export const PricingCards = ({
         "Custom training",
         "API access",
       ],
-      cta: "Contact Sales",
-      ctaLink: "#contact",
+      cta: isEnterprise ? "Current Plan" : "Start Enterprise Trial",
+      ctaLink: isAuthenticated ? "/dashboard" : "/auth",
       variant: "outline" as const,
       popular: false,
-      isCurrentPlan: false,
+      isCurrentPlan: isEnterprise,
     },
   ];
 
@@ -115,7 +117,7 @@ export const PricingCards = ({
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            {plan.name === "Pro" && !plan.isCurrentPlan ? (
+            {(plan.name === "Pro" || plan.name === "Enterprise") && !plan.isCurrentPlan ? (
               <Button
                 variant={plan.variant}
                 className={`w-full ${

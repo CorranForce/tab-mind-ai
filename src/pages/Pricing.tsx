@@ -11,7 +11,7 @@ import { PricingCTA } from "@/components/pricing/PricingCTA";
 
 const Pricing = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const { isPro, loading: subscriptionLoading, createCheckout } = useSubscription();
+  const { isPro, isEnterprise, loading: subscriptionLoading, createCheckout } = useSubscription();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
 
   useEffect(() => {
@@ -33,6 +33,16 @@ const Pricing = () => {
       setCheckoutLoading("Pro");
       try {
         await createCheckout(STRIPE_PRODUCTS.pro.price_id);
+      } catch (error) {
+        console.error("Checkout error:", error);
+        toast.error("Failed to start checkout. Please try again.");
+      } finally {
+        setCheckoutLoading(null);
+      }
+    } else if (planName === "Enterprise") {
+      setCheckoutLoading("Enterprise");
+      try {
+        await createCheckout(STRIPE_PRODUCTS.enterprise.price_id);
       } catch (error) {
         console.error("Checkout error:", error);
         toast.error("Failed to start checkout. Please try again.");
@@ -62,6 +72,7 @@ const Pricing = () => {
         <PricingCards
           isAuthenticated={isAuthenticated}
           isPro={isPro}
+          isEnterprise={isEnterprise}
           subscriptionLoading={subscriptionLoading}
           checkoutLoading={checkoutLoading}
           onSubscribe={handleSubscribe}
