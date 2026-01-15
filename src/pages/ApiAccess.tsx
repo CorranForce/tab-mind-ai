@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Key, Plus, Copy, Trash2, Eye, EyeOff, Shield, ArrowLeft, Loader2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Brain, Key, Plus, Copy, Trash2, Eye, EyeOff, Shield, ArrowLeft, Loader2, BarChart3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription, STRIPE_PRODUCTS } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
+import { ApiUsageAnalytics } from "@/components/api/ApiUsageAnalytics";
 import {
   Dialog,
   DialogContent,
@@ -259,7 +261,21 @@ const ApiAccess = () => {
           </CardContent>
         </Card>
 
-        {/* Create New Key */}
+        {/* Tabs for Keys and Analytics */}
+        <Tabs defaultValue="keys" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="keys" className="flex items-center gap-2">
+              <Key className="w-4 h-4" />
+              API Keys
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Usage Analytics
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="keys" className="space-y-6">
+            {/* Create New Key */}
         <Card className="mb-6 shadow-card">
           <CardHeader>
             <CardTitle>Create New API Key</CardTitle>
@@ -437,6 +453,12 @@ const ApiAccess = () => {
             </div>
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="analytics">
+            <ApiUsageAnalytics apiKeys={apiKeys} />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
