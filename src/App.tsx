@@ -10,6 +10,7 @@ import PaymentMethods from "./pages/PaymentMethods";
 import Profile from "./pages/Profile";
 import Pricing from "./pages/Pricing";
 import Admin from "./pages/Admin";
+import ApiAccess from "./pages/ApiAccess";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/profile" element={<Profile />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/api-access" element={<ApiAccess />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

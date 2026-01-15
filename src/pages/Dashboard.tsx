@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Mail, Check, Shield, FlaskConical } from "lucide-react";
+import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Mail, Check, Shield, FlaskConical, Key } from "lucide-react";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { TrialCountdown } from "@/components/TrialCountdown";
 import { FeatureComparisonModal } from "@/components/FeatureComparisonModal";
@@ -86,7 +86,7 @@ const DashboardContent = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isPro, subscriptionEnd, openCustomerPortal, checkSubscription, createCheckout } = useSubscription();
+  const { isPro, isEnterprise, subscriptionEnd, openCustomerPortal, checkSubscription, createCheckout } = useSubscription();
   const [skipTrialLoading, setSkipTrialLoading] = useState(false);
   const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistLoading, setWaitlistLoading] = useState(false);
@@ -252,6 +252,14 @@ const DashboardContent = () => {
                     Payment Methods
                   </Link>
                 </DropdownMenuItem>
+                {isEnterprise && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/api-access" className="flex items-center cursor-pointer">
+                      <Key className="w-4 h-4 mr-2" />
+                      API Access
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 {isAdmin && (
                   <DropdownMenuItem asChild>
