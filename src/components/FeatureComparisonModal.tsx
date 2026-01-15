@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Check, X, Crown, Sparkles, Brain, Archive, Zap } from "lucide-react";
+import { Check, X, Crown, Sparkles, Brain, Archive, Zap, Building2 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface FeatureComparisonModalProps {
@@ -21,6 +21,7 @@ const features = [
     description: "View and organize your tabs",
     free: true,
     pro: true,
+    enterprise: true,
     icon: Archive,
   },
   {
@@ -28,6 +29,7 @@ const features = [
     description: "Access recently visited tabs",
     free: true,
     pro: true,
+    enterprise: true,
     icon: Archive,
   },
   {
@@ -35,6 +37,7 @@ const features = [
     description: "Smart tab suggestions based on your behavior",
     free: "Limited (1)",
     pro: "Unlimited",
+    enterprise: "Unlimited",
     icon: Brain,
   },
   {
@@ -42,6 +45,7 @@ const features = [
     description: "Pattern detection & personalized suggestions",
     free: false,
     pro: true,
+    enterprise: true,
     icon: Sparkles,
   },
   {
@@ -49,6 +53,7 @@ const features = [
     description: "Detailed usage statistics and trends",
     free: false,
     pro: true,
+    enterprise: true,
     icon: Zap,
   },
   {
@@ -56,6 +61,7 @@ const features = [
     description: "Sync tabs across all your devices",
     free: false,
     pro: true,
+    enterprise: true,
     icon: Zap,
   },
   {
@@ -63,6 +69,39 @@ const features = [
     description: "Get help faster with priority access",
     free: false,
     pro: true,
+    enterprise: true,
+    icon: Crown,
+  },
+  {
+    name: "Custom Reports",
+    description: "Generate tailored analytics reports",
+    free: false,
+    pro: false,
+    enterprise: true,
+    icon: Sparkles,
+  },
+  {
+    name: "API Access",
+    description: "Integrate with your existing tools",
+    free: false,
+    pro: false,
+    enterprise: true,
+    icon: Zap,
+  },
+  {
+    name: "Dedicated Support",
+    description: "Personal account manager & SLA",
+    free: false,
+    pro: false,
+    enterprise: true,
+    icon: Crown,
+  },
+  {
+    name: "Team Management",
+    description: "Admin controls & user permissions",
+    free: false,
+    pro: false,
+    enterprise: true,
     icon: Crown,
   },
 ];
@@ -98,52 +137,71 @@ export const FeatureComparisonModal = ({
 
         <div className="mt-4">
           {/* Header */}
-          <div className="grid grid-cols-[1fr_80px_80px] gap-4 pb-3 border-b border-border">
+          <div className="grid grid-cols-[1fr_70px_70px_90px] gap-3 pb-3 border-b border-border">
             <div className="text-sm font-medium text-muted-foreground">Feature</div>
             <div className="text-sm font-medium text-center">Free</div>
             <div className="text-sm font-medium text-center text-primary">Pro</div>
+            <div className="text-sm font-medium text-center flex items-center justify-center gap-1">
+              <Building2 className="w-3 h-3" />
+              Enterprise
+            </div>
           </div>
 
           {/* Features */}
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-border max-h-[400px] overflow-y-auto">
             {features.map((feature) => {
               const Icon = feature.icon;
               const isHighlighted = highlightFeature && feature.name.toLowerCase().includes(highlightFeature.toLowerCase());
+              const isEnterpriseOnly = !feature.free && !feature.pro && feature.enterprise;
               
               return (
                 <div
                   key={feature.name}
-                  className={`grid grid-cols-[1fr_80px_80px] gap-4 py-3 items-center transition-colors ${
+                  className={`grid grid-cols-[1fr_70px_70px_90px] gap-3 py-3 items-center transition-colors ${
                     isHighlighted ? "bg-primary/5 -mx-4 px-4 rounded-lg" : ""
-                  }`}
+                  } ${isEnterpriseOnly ? "bg-muted/30" : ""}`}
                 >
                   <div className="flex items-center gap-3">
-                    <Icon className={`w-4 h-4 ${isHighlighted ? "text-primary" : "text-muted-foreground"}`} />
+                    <Icon className={`w-4 h-4 ${isHighlighted ? "text-primary" : isEnterpriseOnly ? "text-amber-500" : "text-muted-foreground"}`} />
                     <div>
                       <p className={`text-sm font-medium ${isHighlighted ? "text-primary" : ""}`}>
                         {feature.name}
+                        {isEnterpriseOnly && (
+                          <span className="ml-2 text-xs bg-amber-500/10 text-amber-600 px-1.5 py-0.5 rounded">
+                            Enterprise
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-muted-foreground">{feature.description}</p>
                     </div>
                   </div>
                   <div className="flex justify-center">{renderValue(feature.free)}</div>
                   <div className="flex justify-center">{renderValue(feature.pro)}</div>
+                  <div className="flex justify-center">{renderValue(feature.enterprise)}</div>
                 </div>
               );
             })}
           </div>
         </div>
 
-        <div className="mt-6 flex gap-3">
-          <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>
+        <div className="mt-6 flex flex-col gap-3">
+          <div className="flex gap-3">
+            <Link to="/pricing" className="flex-1">
+              <Button className="w-full" variant="outline">
+                <Crown className="w-4 h-4 mr-2" />
+                Pro - $12/mo
+              </Button>
+            </Link>
+            <Link to="/pricing" className="flex-1">
+              <Button className="w-full">
+                <Building2 className="w-4 h-4 mr-2" />
+                Enterprise - $99/mo
+              </Button>
+            </Link>
+          </div>
+          <Button variant="ghost" className="w-full" onClick={() => onOpenChange(false)}>
             Maybe Later
           </Button>
-          <Link to="/pricing" className="flex-1">
-            <Button className="w-full">
-              <Crown className="w-4 h-4 mr-2" />
-              Upgrade to Pro - $12/mo
-            </Button>
-          </Link>
         </div>
       </DialogContent>
     </Dialog>
