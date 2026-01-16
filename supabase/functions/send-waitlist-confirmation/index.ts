@@ -6,6 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Rate limiting: 5 waitlist emails per hour per email (prevent spam)
+const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_WINDOW = 3600; // 1 hour in seconds
+
 interface WaitlistRequest {
   email: string;
 }
@@ -41,10 +45,40 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
+    // Check rate limit first
+    const normalizedEmail = email.toLowerCase().trim();
+    const { data: rateLimitResult, error: rateLimitError } = await supabaseClient
+      .rpc("check_rate_limit", {
+        p_identifier: normalizedEmail,
+        p_endpoint: "send-waitlist-confirmation",
+        p_max_requests: RATE_LIMIT_MAX,
+        p_window_seconds: RATE_LIMIT_WINDOW,
+      });
+
+    if (rateLimitError) {
+      console.error("Rate limit check failed:", rateLimitError);
+    } else if (rateLimitResult && !rateLimitResult.allowed) {
+      console.warn("Rate limit exceeded for email:", normalizedEmail);
+      return new Response(
+        JSON.stringify({
+          error: "Too many requests. Please try again later.",
+          retry_after: rateLimitResult.retry_after,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": String(rateLimitResult.retry_after),
+          },
+        }
+      );
+    }
+
     const { data: waitlistEntry, error: waitlistError } = await supabaseClient
       .from("extension_waitlist")
       .select("id, email")
-      .eq("email", email.toLowerCase().trim())
+      .eq("email", normalizedEmail)
       .maybeSingle();
 
     if (waitlistError) {

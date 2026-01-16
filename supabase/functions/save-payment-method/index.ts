@@ -7,6 +7,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Rate limiting: 10 payment method saves per hour per user
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW = 3600; // 1 hour in seconds
+
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[SAVE-PAYMENT-METHOD] ${step}${detailsStr}`);
@@ -50,6 +54,35 @@ serve(async (req) => {
     }
     const user = userData.user;
     logStep("User authenticated", { userId: user.id });
+
+    // Check rate limit
+    const { data: rateLimitResult, error: rateLimitError } = await supabaseClient
+      .rpc("check_rate_limit", {
+        p_identifier: user.id,
+        p_endpoint: "save-payment-method",
+        p_max_requests: RATE_LIMIT_MAX,
+        p_window_seconds: RATE_LIMIT_WINDOW,
+      });
+
+    if (rateLimitError) {
+      logStep("Rate limit check failed", { error: rateLimitError.message });
+    } else if (rateLimitResult && !rateLimitResult.allowed) {
+      logStep("Rate limit exceeded", rateLimitResult);
+      return new Response(
+        JSON.stringify({
+          error: "Too many requests. Please try again later.",
+          retry_after: rateLimitResult.retry_after,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": String(rateLimitResult.retry_after),
+          },
+        }
+      );
+    }
 
     let body: any;
     try {

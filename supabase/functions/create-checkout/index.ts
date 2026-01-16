@@ -7,6 +7,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Rate limiting: 10 checkout requests per minute per user
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW = 60; // seconds
+
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
@@ -34,6 +38,41 @@ serve(async (req) => {
     const user = data.user;
     if (!user?.email) throw new Error("User not authenticated or email not available");
     logStep("User authenticated", { email: user.email });
+
+    // Check rate limit using service role client
+    const serviceClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } }
+    );
+
+    const { data: rateLimitResult, error: rateLimitError } = await serviceClient
+      .rpc("check_rate_limit", {
+        p_identifier: user.id,
+        p_endpoint: "create-checkout",
+        p_max_requests: RATE_LIMIT_MAX,
+        p_window_seconds: RATE_LIMIT_WINDOW,
+      });
+
+    if (rateLimitError) {
+      logStep("Rate limit check failed", { error: rateLimitError.message });
+    } else if (rateLimitResult && !rateLimitResult.allowed) {
+      logStep("Rate limit exceeded", rateLimitResult);
+      return new Response(
+        JSON.stringify({
+          error: "Too many requests. Please try again later.",
+          retry_after: rateLimitResult.retry_after,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": String(rateLimitResult.retry_after),
+          },
+        }
+      );
+    }
 
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2025-08-27.basil",
@@ -69,7 +108,7 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ error: "An error occurred" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

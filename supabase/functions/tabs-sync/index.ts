@@ -6,6 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Rate limiting: 60 requests per minute per user
+const RATE_LIMIT_MAX = 60;
+const RATE_LIMIT_WINDOW = 60; // seconds
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -28,6 +32,41 @@ serve(async (req) => {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Check rate limit using service role client
+    const serviceClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } }
+    );
+
+    const { data: rateLimitResult, error: rateLimitError } = await serviceClient
+      .rpc("check_rate_limit", {
+        p_identifier: user.id,
+        p_endpoint: "tabs-sync",
+        p_max_requests: RATE_LIMIT_MAX,
+        p_window_seconds: RATE_LIMIT_WINDOW,
+      });
+
+    if (rateLimitError) {
+      console.error("Rate limit check failed:", rateLimitError);
+      // Continue without rate limiting if check fails
+    } else if (rateLimitResult && !rateLimitResult.allowed) {
+      return new Response(
+        JSON.stringify({
+          error: "Rate limit exceeded",
+          retry_after: rateLimitResult.retry_after,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": String(rateLimitResult.retry_after),
+          },
+        }
+      );
     }
 
     const { tabs } = await req.json();
