@@ -28,13 +28,22 @@ serve(async (req) => {
 
     // Authenticate the requesting user
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header provided");
+    if (!authHeader) {
+      logStep("No authorization header provided");
+      throw new Error("UNAUTHORIZED");
+    }
 
     const token = authHeader.replace("Bearer ", "");
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
+    if (userError) {
+      logStep("Authentication error", { error: userError.message });
+      throw new Error("UNAUTHORIZED");
+    }
     const user = userData.user;
-    if (!user) throw new Error("User not authenticated");
+    if (!user) {
+      logStep("User not authenticated");
+      throw new Error("UNAUTHORIZED");
+    }
     logStep("User authenticated", { userId: user.id });
 
     // Check if user is admin
@@ -45,8 +54,14 @@ serve(async (req) => {
       .eq("role", "admin")
       .maybeSingle();
 
-    if (roleError) throw new Error(`Role check error: ${roleError.message}`);
-    if (!roleData) throw new Error("Unauthorized: Admin access required");
+    if (roleError) {
+      logStep("Role check error", { error: roleError.message });
+      throw new Error("FORBIDDEN");
+    }
+    if (!roleData) {
+      logStep("User is not admin");
+      throw new Error("FORBIDDEN");
+    }
     logStep("Admin role verified");
 
     // Get all users with their subscriptions and profiles
@@ -54,19 +69,28 @@ serve(async (req) => {
       .from("subscriptions")
       .select("user_id, status, trial_ends_at, current_period_end, current_period_start, created_at, stripe_subscription_id, custom_price");
 
-    if (subError) throw new Error(`Subscriptions query error: ${subError.message}`);
+    if (subError) {
+      logStep("Subscriptions query error", { error: subError.message });
+      throw new Error("QUERY_FAILED");
+    }
     logStep("Subscriptions loaded", { count: subscriptions?.length });
 
     // Get user emails and last sign in from auth.users via admin API
     const { data: authUsers, error: authError } = await supabaseClient.auth.admin.listUsers();
-    if (authError) throw new Error(`Auth users query error: ${authError.message}`);
+    if (authError) {
+      logStep("Auth users query error", { error: authError.message });
+      throw new Error("QUERY_FAILED");
+    }
 
     // Get profiles for full names
     const { data: profiles, error: profileError } = await supabaseClient
       .from("profiles")
       .select("id, full_name, updated_at");
 
-    if (profileError) throw new Error(`Profiles query error: ${profileError.message}`);
+    if (profileError) {
+      logStep("Profiles query error", { error: profileError.message });
+      throw new Error("QUERY_FAILED");
+    }
 
     // Get admin roles
     const { data: adminRoles, error: rolesError } = await supabaseClient
@@ -176,9 +200,17 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    
+    // Map internal errors to generic client messages
+    const statusCode = errorMessage === "UNAUTHORIZED" ? 401 : 
+                       errorMessage === "FORBIDDEN" ? 403 : 500;
+    const clientMessage = errorMessage === "UNAUTHORIZED" ? "Unauthorized" :
+                          errorMessage === "FORBIDDEN" ? "Admin access required" :
+                          "An error occurred";
+    
+    return new Response(JSON.stringify({ error: clientMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+      status: statusCode,
     });
   }
 });

@@ -79,8 +79,8 @@ serve(async (req) => {
     });
   } catch (error: unknown) {
     console.error("Error syncing tabs:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return new Response(JSON.stringify({ error: message }), {
+    // Log detailed error server-side, return generic message to client
+    return new Response(JSON.stringify({ error: "Failed to sync tabs" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
