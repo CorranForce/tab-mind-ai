@@ -32,13 +32,22 @@ serve(async (req) => {
 
     // Authenticate the requesting user
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header provided");
+    if (!authHeader) {
+      logStep("No authorization header provided");
+      throw new Error("UNAUTHORIZED");
+    }
 
     const token = authHeader.replace("Bearer ", "");
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
+    if (userError) {
+      logStep("Authentication error", { error: userError.message });
+      throw new Error("UNAUTHORIZED");
+    }
     const adminUser = userData.user;
-    if (!adminUser) throw new Error("User not authenticated");
+    if (!adminUser) {
+      logStep("User not authenticated");
+      throw new Error("UNAUTHORIZED");
+    }
     logStep("User authenticated", { userId: adminUser.id });
 
     // Check if user is admin
@@ -49,23 +58,36 @@ serve(async (req) => {
       .eq("role", "admin")
       .maybeSingle();
 
-    if (roleError) throw new Error(`Role check error: ${roleError.message}`);
-    if (!roleData) throw new Error("Unauthorized: Admin access required");
+    if (roleError) {
+      logStep("Role check error", { error: roleError.message });
+      throw new Error("FORBIDDEN");
+    }
+    if (!roleData) {
+      logStep("User is not admin");
+      throw new Error("FORBIDDEN");
+    }
     logStep("Admin role verified");
 
     // Parse request body
     const { userId, action, billingDate, customPrice } = await req.json();
-    if (!userId) throw new Error("userId is required");
+    if (!userId) {
+      logStep("userId is required");
+      throw new Error("BAD_REQUEST");
+    }
     
     const validActions = ["grant_pro", "revoke_pro", "update_billing_date", "update_custom_price", "clear_custom_price"];
     if (!action || !validActions.includes(action)) {
-      throw new Error(`Invalid action. Must be one of: ${validActions.join(", ")}`);
+      logStep("Invalid action", { action, validActions });
+      throw new Error("BAD_REQUEST");
     }
     logStep("Request parsed", { userId, action, billingDate, customPrice });
 
     // Get user's email for Stripe operations
     const { data: targetUser, error: targetUserError } = await supabaseClient.auth.admin.getUserById(userId);
-    if (targetUserError) throw new Error(`Error fetching target user: ${targetUserError.message}`);
+    if (targetUserError) {
+      logStep("Error fetching target user", { error: targetUserError.message });
+      throw new Error("USER_NOT_FOUND");
+    }
     const userEmail = targetUser.user?.email;
     logStep("Target user email", { email: userEmail });
 
@@ -82,7 +104,10 @@ serve(async (req) => {
         })
         .eq("user_id", userId);
 
-      if (updateError) throw new Error(`Update error: ${updateError.message}`);
+      if (updateError) {
+        logStep("Update error", { error: updateError.message });
+        throw new Error("UPDATE_FAILED");
+      }
       logStep("Pro access granted", { userId });
       
     } else if (action === "revoke_pro") {
@@ -98,16 +123,23 @@ serve(async (req) => {
         })
         .eq("user_id", userId);
 
-      if (updateError) throw new Error(`Update error: ${updateError.message}`);
+      if (updateError) {
+        logStep("Update error", { error: updateError.message });
+        throw new Error("UPDATE_FAILED");
+      }
       logStep("Pro access revoked", { userId });
       
     } else if (action === "update_billing_date") {
-      if (!billingDate) throw new Error("billingDate is required for update_billing_date action");
+      if (!billingDate) {
+        logStep("billingDate is required for update_billing_date action");
+        throw new Error("BAD_REQUEST");
+      }
       
       // Parse and validate the date
       const newBillingDate = new Date(billingDate);
       if (isNaN(newBillingDate.getTime())) {
-        throw new Error("Invalid billingDate format");
+        logStep("Invalid billingDate format", { billingDate });
+        throw new Error("BAD_REQUEST");
       }
       
       // Update the billing/subscription end date
@@ -118,16 +150,26 @@ serve(async (req) => {
         })
         .eq("user_id", userId);
 
-      if (updateError) throw new Error(`Update error: ${updateError.message}`);
+      if (updateError) {
+        logStep("Update error", { error: updateError.message });
+        throw new Error("UPDATE_FAILED");
+      }
       logStep("Billing date updated", { userId, newBillingDate: newBillingDate.toISOString() });
       
     } else if (action === "update_custom_price") {
-      if (!customPrice) throw new Error("customPrice is required for update_custom_price action");
-      if (!userEmail) throw new Error("User email not found");
+      if (!customPrice) {
+        logStep("customPrice is required for update_custom_price action");
+        throw new Error("BAD_REQUEST");
+      }
+      if (!userEmail) {
+        logStep("User email not found");
+        throw new Error("USER_NOT_FOUND");
+      }
       
       const priceInCents = Math.round(parseFloat(customPrice) * 100);
       if (isNaN(priceInCents) || priceInCents <= 0) {
-        throw new Error("Invalid custom price. Must be a positive number.");
+        logStep("Invalid custom price", { customPrice });
+        throw new Error("BAD_REQUEST");
       }
       logStep("Custom price in cents", { priceInCents });
 
@@ -150,7 +192,10 @@ serve(async (req) => {
         .eq("user_id", userId)
         .maybeSingle();
       
-      if (subError) throw new Error(`Error fetching subscription: ${subError.message}`);
+      if (subError) {
+        logStep("Error fetching subscription", { error: subError.message });
+        throw new Error("QUERY_FAILED");
+      }
 
       // Create a custom price in Stripe
       const customStripePrice = await stripe.prices.create({
@@ -204,14 +249,20 @@ serve(async (req) => {
           })
           .eq("user_id", userId);
         
-        if (updateError) throw new Error(`Error updating subscription: ${updateError.message}`);
+        if (updateError) {
+          logStep("Error updating subscription", { error: updateError.message });
+          throw new Error("UPDATE_FAILED");
+        }
         logStep("Saved custom price to database (no Stripe subscription)", { 
           customPrice,
           stripePrice: customStripePrice.id 
         });
       }
     } else if (action === "clear_custom_price") {
-      if (!userEmail) throw new Error("User email not found");
+      if (!userEmail) {
+        logStep("User email not found");
+        throw new Error("USER_NOT_FOUND");
+      }
       
       // Get user's current subscription from database
       const { data: subData, error: subError } = await supabaseClient
@@ -220,7 +271,10 @@ serve(async (req) => {
         .eq("user_id", userId)
         .maybeSingle();
       
-      if (subError) throw new Error(`Error fetching subscription: ${subError.message}`);
+      if (subError) {
+        logStep("Error fetching subscription", { error: subError.message });
+        throw new Error("QUERY_FAILED");
+      }
 
       if (subData?.stripe_subscription_id) {
         // Get the default product price from Stripe
@@ -265,7 +319,10 @@ serve(async (req) => {
         .update({ custom_price: null })
         .eq("user_id", userId);
       
-      if (updateError) throw new Error(`Error clearing custom price: ${updateError.message}`);
+      if (updateError) {
+        logStep("Error clearing custom price", { error: updateError.message });
+        throw new Error("UPDATE_FAILED");
+      }
       logStep("Custom price cleared from database", { userId });
     }
 
@@ -276,9 +333,22 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    
+    // Map internal errors to generic client messages
+    const errorMap: Record<string, { status: number; message: string }> = {
+      "UNAUTHORIZED": { status: 401, message: "Unauthorized" },
+      "FORBIDDEN": { status: 403, message: "Admin access required" },
+      "BAD_REQUEST": { status: 400, message: "Invalid request" },
+      "USER_NOT_FOUND": { status: 404, message: "User not found" },
+      "QUERY_FAILED": { status: 500, message: "Operation failed" },
+      "UPDATE_FAILED": { status: 500, message: "Update failed" },
+    };
+    
+    const mapped = errorMap[errorMessage] || { status: 500, message: "An error occurred" };
+    
+    return new Response(JSON.stringify({ error: mapped.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+      status: mapped.status,
     });
   }
 });

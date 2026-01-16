@@ -30,13 +30,22 @@ serve(async (req) => {
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header provided");
+    if (!authHeader) {
+      logStep("No authorization header provided");
+      throw new Error("UNAUTHORIZED");
+    }
 
     const token = authHeader.replace("Bearer ", "");
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
+    if (userError) {
+      logStep("Authentication error", { error: userError.message });
+      throw new Error("UNAUTHORIZED");
+    }
     const user = userData.user;
-    if (!user?.email) throw new Error("User not authenticated or email not available");
+    if (!user?.email) {
+      logStep("User not authenticated or email not available");
+      throw new Error("UNAUTHORIZED");
+    }
     logStep("User authenticated", { userId: user.id, email: user.email });
 
     // First check database for manually granted subscriptions (admin-granted pro access)
@@ -113,9 +122,14 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    
+    // Map internal errors to generic client messages
+    const statusCode = errorMessage === "UNAUTHORIZED" ? 401 : 500;
+    const clientMessage = errorMessage === "UNAUTHORIZED" ? "Unauthorized" : "An error occurred";
+    
+    return new Response(JSON.stringify({ error: clientMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+      status: statusCode,
     });
   }
 });
