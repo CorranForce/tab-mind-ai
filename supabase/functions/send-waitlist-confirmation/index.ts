@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,15 +19,61 @@ serve(async (req) => {
     const { email }: WaitlistRequest = await req.json();
     
     if (!email) {
-      throw new Error("Email is required");
+      return new Response(JSON.stringify({ error: "Email is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email) || email.length > 255) {
+      return new Response(JSON.stringify({ error: "Invalid email format" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Verify email exists in waitlist to prevent abuse
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } }
+    );
+
+    const { data: waitlistEntry, error: waitlistError } = await supabaseClient
+      .from("extension_waitlist")
+      .select("id, email")
+      .eq("email", email.toLowerCase().trim())
+      .maybeSingle();
+
+    if (waitlistError) {
+      console.error("Error checking waitlist:", waitlistError);
+      return new Response(JSON.stringify({ error: "Failed to verify waitlist entry" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!waitlistEntry) {
+      // Email not in waitlist - don't send email (prevents spam)
+      console.warn("Email not found in waitlist, skipping:", email);
+      return new Response(JSON.stringify({ error: "Email not registered in waitlist" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     if (!resendApiKey) {
-      throw new Error("RESEND_API_KEY is not configured");
+      console.error("RESEND_API_KEY is not configured");
+      return new Response(JSON.stringify({ error: "Email service not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log("Sending waitlist confirmation to:", email);
+    console.log("Sending waitlist confirmation to verified email:", email);
 
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -85,7 +132,10 @@ serve(async (req) => {
     if (!response.ok) {
       const errorData = await response.text();
       console.error("Resend API error:", errorData);
-      throw new Error(`Failed to send email: ${errorData}`);
+      return new Response(JSON.stringify({ error: "Failed to send email" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const result = await response.json();
@@ -97,7 +147,7 @@ serve(async (req) => {
     });
   } catch (error: any) {
     console.error("Error sending waitlist confirmation:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: "An error occurred" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

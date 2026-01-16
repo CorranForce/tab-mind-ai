@@ -43,7 +43,7 @@ interface PaymentMethod {
   card_last4: string | null;
   card_exp_month: number | null;
   card_exp_year: number | null;
-  stripe_payment_method_id: string | null;
+  is_default: boolean | null;
 }
 
 const AddCardForm = ({ onSuccess }: { onSuccess: () => void }) => {
@@ -168,17 +168,23 @@ const PaymentMethods = () => {
 
   const fetchPaymentMethods = async () => {
     try {
-      const { data, error } = await supabase
-        .from("payment_methods")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setLoading(false);
+        return;
+      }
+
+      // Fetch payment methods via edge function (retrieves card details from Stripe API)
+      const { data, error } = await supabase.functions.invoke("get-payment-methods", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
 
       if (error) throw error;
-      setPaymentMethods(data || []);
+      setPaymentMethods(data?.paymentMethods || []);
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message,
+        description: "Failed to load payment methods",
         variant: "destructive",
       });
     } finally {
