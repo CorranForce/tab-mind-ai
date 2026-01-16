@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.admin-get-revenue]
 verify_jwt = false
+
+[functions.get-payment-methods]
+verify_jwt = false

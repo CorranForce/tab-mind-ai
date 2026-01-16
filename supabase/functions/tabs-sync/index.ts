@@ -39,8 +39,18 @@ serve(async (req) => {
     }
 
     // Upsert tab activity data
+    let syncedCount = 0;
     for (const tab of tabs) {
       if (!tab.url) continue;
+
+      // Safely parse URL to extract domain
+      let domain: string | null = null;
+      try {
+        domain = new URL(tab.url).hostname;
+      } catch (e) {
+        console.error("Invalid URL format, skipping tab:", tab.url);
+        continue; // Skip this tab, process others
+      }
 
       const { error } = await supabaseClient
         .from("tab_activity")
@@ -51,7 +61,7 @@ serve(async (req) => {
           favicon_url: tab.favIconUrl?.substring(0, 500) || null,
           visit_count: tab.visits || 1,
           last_visited_at: new Date().toISOString(),
-          domain: new URL(tab.url).hostname,
+          domain: domain,
         }, {
           onConflict: "user_id,url",
           ignoreDuplicates: false,
@@ -59,10 +69,12 @@ serve(async (req) => {
 
       if (error) {
         console.error("Error upserting tab:", error);
+      } else {
+        syncedCount++;
       }
     }
 
-    return new Response(JSON.stringify({ success: true, synced: tabs.length }), {
+    return new Response(JSON.stringify({ success: true, synced: syncedCount }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {

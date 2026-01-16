@@ -11,6 +11,25 @@ const logStep = (step: string, details?: any) => {
   console.log(`[TRIAL-EXPIRY-REMINDER] ${step}${detailsStr}`);
 };
 
+// Verify HMAC signature for secure webhook calls
+const verifySignature = async (payload: string, signature: string, secret: string): Promise<boolean> => {
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign", "verify"]
+    );
+    const signatureBuffer = Uint8Array.from(atob(signature), c => c.charCodeAt(0));
+    const dataBuffer = encoder.encode(payload);
+    return await crypto.subtle.verify("HMAC", key, signatureBuffer, dataBuffer);
+  } catch {
+    return false;
+  }
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -19,20 +38,113 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendApiKey) {
-      throw new Error("RESEND_API_KEY is not configured");
+    // Authentication check - require either admin auth or cron secret
+    const authHeader = req.headers.get("Authorization");
+    const cronSecret = Deno.env.get("CRON_SECRET_TOKEN");
+    const signatureHeader = req.headers.get("X-Signature");
+    
+    let isAuthenticated = false;
+    let isAdmin = false;
+
+    // Check for admin authentication
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.slice(7);
+      
+      // Check if it's the cron secret token
+      if (cronSecret && token === cronSecret) {
+        isAuthenticated = true;
+        logStep("Authenticated via cron secret token");
+      } else {
+        // Check for admin user via JWT
+        const supabaseClient = createClient(
+          Deno.env.get("SUPABASE_URL") ?? "",
+          Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+          {
+            global: {
+              headers: { Authorization: authHeader },
+            },
+          }
+        );
+
+        const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+        
+        if (!authError && user) {
+          // Check admin role
+          const serviceClient = createClient(
+            Deno.env.get("SUPABASE_URL") ?? "",
+            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+            { auth: { persistSession: false } }
+          );
+
+          const { data: roleData } = await serviceClient
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", user.id)
+            .eq("role", "admin")
+            .maybeSingle();
+
+          if (roleData) {
+            isAuthenticated = true;
+            isAdmin = true;
+            logStep("Authenticated as admin user", { userId: user.id });
+          }
+        }
+      }
     }
 
-    // Check for test mode
+    // Check for HMAC signature authentication (for webhooks)
+    if (!isAuthenticated && signatureHeader && cronSecret) {
+      const body = await req.clone().text();
+      if (await verifySignature(body, signatureHeader, cronSecret)) {
+        isAuthenticated = true;
+        logStep("Authenticated via HMAC signature");
+      }
+    }
+
+    if (!isAuthenticated) {
+      logStep("Authentication failed");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendApiKey) {
+      logStep("RESEND_API_KEY is not configured");
+      return new Response(JSON.stringify({ error: "Email service not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse request body
     let body: any = {};
     try {
       body = await req.json();
     } catch {
-      // No body or invalid JSON is fine
+      // No body or invalid JSON is fine for cron jobs
     }
 
+    // Test mode only allowed for authenticated admins
     if (body.testEmail) {
+      if (!isAdmin) {
+        logStep("Test mode requires admin authentication");
+        return new Response(JSON.stringify({ error: "Admin authentication required for test mode" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Validate test email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(body.testEmail) || body.testEmail.length > 255) {
+        return new Response(JSON.stringify({ error: "Invalid email format" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       logStep("Test mode - sending to", { email: body.testEmail });
       
       const response = await fetch("https://api.resend.com/emails", {
@@ -97,7 +209,11 @@ serve(async (req) => {
 
       if (!response.ok) {
         const errorData = await response.text();
-        throw new Error(`Failed to send test email: ${errorData}`);
+        logStep("Failed to send test email", { error: errorData });
+        return new Response(JSON.stringify({ error: "Failed to send test email" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
       logStep("Test email sent successfully");
@@ -132,7 +248,11 @@ serve(async (req) => {
       .lte("trial_ends_at", in25Hours.toISOString());
 
     if (fetchError) {
-      throw new Error(`Failed to fetch expiring trials: ${fetchError.message}`);
+      logStep("Failed to fetch expiring trials", { error: fetchError.message });
+      return new Response(JSON.stringify({ error: "Failed to fetch expiring trials" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     logStep("Found expiring trials", { count: expiringTrials?.length || 0 });
@@ -156,7 +276,7 @@ serve(async (req) => {
         const { data: userData, error: userError } = await supabaseClient.auth.admin.getUserById(trial.user_id);
         
         if (userError || !userData?.user?.email) {
-          logStep("Could not get user email", { userId: trial.user_id, error: userError?.message });
+          logStep("Could not get user email", { userId: trial.user_id });
           continue;
         }
 
@@ -230,7 +350,7 @@ serve(async (req) => {
 
         if (!response.ok) {
           const errorData = await response.text();
-          logStep("Failed to send email", { email: userEmail, error: errorData });
+          logStep("Failed to send email", { email: userEmail });
           continue;
         }
 
@@ -241,14 +361,14 @@ serve(async (req) => {
           .eq("id", trial.id);
 
         if (updateError) {
-          logStep("Failed to mark reminder as sent", { id: trial.id, error: updateError.message });
+          logStep("Failed to mark reminder as sent", { id: trial.id });
         } else {
           sentCount++;
           logStep("Reminder sent successfully", { email: userEmail });
         }
 
       } catch (innerError: any) {
-        logStep("Error processing trial", { id: trial.id, error: innerError.message });
+        logStep("Error processing trial", { id: trial.id });
       }
     }
 
@@ -265,7 +385,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     logStep("ERROR", { message: error.message });
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: "An error occurred" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
