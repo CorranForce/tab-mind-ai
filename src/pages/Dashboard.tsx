@@ -15,6 +15,7 @@ import { useAdminRole } from "@/hooks/useAdminRole";
 import { AdminAccountManagerCard } from "@/components/admin/AdminAccountManagerCard";
 import { AdminRevenueCard } from "@/components/admin/AdminRevenueCard";
 import { PlatformOwnerOrProCard } from "@/components/PlatformOwnerOrProCard";
+import { ExtensionWaitlistDialog } from "@/components/ExtensionWaitlistDialog";
 import { MockDataProvider, useMockData } from "@/contexts/MockDataContext";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -275,9 +276,11 @@ const DashboardContent = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" size="sm" disabled>
-              Coming Soon
-            </Button>
+            <ExtensionWaitlistDialog>
+              <Button variant="outline" size="sm">
+                Get Extension
+              </Button>
+            </ExtensionWaitlistDialog>
           </nav>
         </div>
       </header>
