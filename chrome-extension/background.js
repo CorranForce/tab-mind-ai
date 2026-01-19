@@ -2,18 +2,29 @@
 
 const SUPABASE_URL = 'https://wjmkijvckvnrrsjzgwge.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndqbWtpanZja3ZucnJzanpnd2dlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzMTg4MjMsImV4cCI6MjA3ODg5NDgyM30.pFICzrCrIXUofun1W5ZtTPVSyKvwjmvQFDQc1asvxX4';
-const WEB_APP_URL = 'https://24b95c2b-2f73-44d7-9dbd-bc0e1eca3d36.lovableproject.com';
+const WEB_APP_URL = 'https://tab-mind-ai.lovable.app';
 
 // Tab activity tracking
 const tabActivity = new Map();
+let activeTabId = null;
+let activeTabStartTime = null;
 
 // Initialize side panel behavior
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
 // Track tab activation
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
+  // Update time spent on previous tab
+  if (activeTabId && activeTabStartTime) {
+    updateTimeSpent(activeTabId);
+  }
+  
   const tab = await chrome.tabs.get(activeInfo.tabId);
   trackTabActivity(tab);
+  
+  // Set new active tab
+  activeTabId = activeInfo.tabId;
+  activeTabStartTime = Date.now();
 });
 
 // Track tab updates
@@ -22,6 +33,27 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     trackTabActivity(tab);
   }
 });
+
+// Track when tabs are closed
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (activeTabId === tabId) {
+    updateTimeSpent(tabId);
+    activeTabId = null;
+    activeTabStartTime = null;
+  }
+});
+
+// Update time spent on a tab
+function updateTimeSpent(tabId) {
+  const existing = tabActivity.get(tabId);
+  if (existing && activeTabStartTime) {
+    const timeSpent = Date.now() - activeTabStartTime;
+    tabActivity.set(tabId, {
+      ...existing,
+      totalTime: (existing.totalTime || 0) + timeSpent
+    });
+  }
+}
 
 // Track tab activity
 function trackTabActivity(tab) {
@@ -42,7 +74,7 @@ function trackTabActivity(tab) {
     title: tab.title,
     favIconUrl: tab.favIconUrl,
     visits: existing.visits + 1,
-    totalTime: existing.totalTime,
+    totalTime: existing.totalTime || 0,
     lastVisit: now,
     firstVisit: existing.firstVisit || now
   });
@@ -99,6 +131,7 @@ async function storeSession(session) {
 // Clear session
 async function clearSession() {
   await chrome.storage.local.remove(['session']);
+  tabActivity.clear();
 }
 
 // Message handling from sidepanel
@@ -138,6 +171,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'CLOSE_TAB') {
+    chrome.tabs.remove(message.tabId).then(() => {
+      tabActivity.delete(message.tabId);
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
   if (message.type === 'OPEN_WEB_LOGIN') {
     chrome.tabs.create({ url: `${WEB_APP_URL}/auth?extension=true` });
     sendResponse({ success: true });
@@ -146,6 +187,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'GET_RECOMMENDATIONS') {
     getRecommendations(message.session).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === 'ARCHIVE_TAB') {
+    archiveTab(message.session, message.url).then(sendResponse);
+    return true;
+  }
+
+  if (message.type === 'GET_TAB_STATS') {
+    getTabStats().then(sendResponse);
     return true;
   }
 });
@@ -174,3 +225,65 @@ async function getRecommendations(session) {
     return { recommendations: [], archived: [] };
   }
 }
+
+// Archive a tab
+async function archiveTab(session, url) {
+  if (!session) return { success: false };
+
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/tabs-sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ 
+        action: 'archive',
+        url 
+      })
+    });
+
+    return { success: response.ok };
+  } catch (error) {
+    console.error('Error archiving tab:', error);
+    return { success: false };
+  }
+}
+
+// Get tab statistics
+async function getTabStats() {
+  const tabs = Array.from(tabActivity.values());
+  const totalTabs = tabs.length;
+  const totalTime = tabs.reduce((acc, tab) => acc + (tab.totalTime || 0), 0);
+  
+  // Get domain distribution
+  const domains = {};
+  tabs.forEach(tab => {
+    try {
+      const domain = new URL(tab.url).hostname.replace('www.', '');
+      domains[domain] = (domains[domain] || 0) + 1;
+    } catch {}
+  });
+  
+  const topDomains = Object.entries(domains)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([domain, count]) => ({ domain, count }));
+
+  return {
+    totalTabs,
+    totalTime,
+    topDomains
+  };
+}
+
+// Listen for auth from web app via content script or storage
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'local' && changes.session) {
+    if (changes.session.newValue) {
+      // Session was set - trigger sync
+      debouncedSync();
+    }
+  }
+});
