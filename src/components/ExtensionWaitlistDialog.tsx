@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Check, Loader2, Mail, Sparkles } from "lucide-react";
+import { Check, Loader2, Mail, Sparkles, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,7 +22,21 @@ export function ExtensionWaitlistDialog({ children }: ExtensionWaitlistDialogPro
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [joined, setJoined] = useState(false);
+  const [waitlistCount, setWaitlistCount] = useState<number | null>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (open) {
+      fetchWaitlistCount();
+    }
+  }, [open]);
+
+  const fetchWaitlistCount = async () => {
+    const { count } = await supabase
+      .from("extension_waitlist")
+      .select("*", { count: "exact", head: true });
+    setWaitlistCount(count);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +75,7 @@ export function ExtensionWaitlistDialog({ children }: ExtensionWaitlistDialogPro
           description: "We'll notify you when the extension launches. Check your email for confirmation.",
         });
         setJoined(true);
+        fetchWaitlistCount();
       }
     } catch (error: any) {
       toast({
@@ -87,7 +102,16 @@ export function ExtensionWaitlistDialog({ children }: ExtensionWaitlistDialogPro
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 pt-4">
+        {waitlistCount !== null && waitlistCount > 0 && (
+          <div className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-primary/5 border border-primary/10">
+            <Users className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium">
+              {waitlistCount.toLocaleString()} {waitlistCount === 1 ? 'person has' : 'people have'} joined the waitlist
+            </span>
+          </div>
+        )}
+
+        <div className="space-y-4 pt-2">
           {joined ? (
             <div className="flex flex-col items-center gap-3 py-6">
               <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">

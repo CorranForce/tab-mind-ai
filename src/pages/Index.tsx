@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Brain, Zap, TrendingUp, Shield } from "lucide-react";
+import { ArrowRight, Brain, Zap, TrendingUp, Shield, Chrome } from "lucide-react";
 import { Link } from "react-router-dom";
+import { ExtensionWaitlistDialog } from "@/components/ExtensionWaitlistDialog";
 
 const Index = () => {
   return (
@@ -149,9 +150,15 @@ const Index = () => {
             </div>
             <div>
               <h3 className="text-2xl font-bold mb-2">Install Extension</h3>
-              <p className="text-muted-foreground text-lg">
+              <p className="text-muted-foreground text-lg mb-3">
                 Add SmartTab AI to Chrome. Sign in with email. That's it.
               </p>
+              <ExtensionWaitlistDialog>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Chrome className="w-4 h-4" />
+                  Join Extension Waitlist
+                </Button>
+              </ExtensionWaitlistDialog>
             </div>
           </div>
 
