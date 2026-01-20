@@ -40,7 +40,7 @@ const Index = () => {
             <Zap className="w-4 h-4" />
             AI-Powered Tab Management
           </div>
-          <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-hero bg-clip-text text-transparent animate-in fade-in slide-in-from-bottom-5 duration-700 delay-100">
+          <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-hero bg-clip-text text-transparent">
             Never Lose a Tab Again
           </h1>
           <p className="text-xl md:text-2xl text-muted-foreground mb-10 animate-in fade-in slide-in-from-bottom-6 duration-700 delay-200">
