@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Mail, Check, Shield, FlaskConical, Key } from "lucide-react";
+import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Mail, Check, Shield, FlaskConical, Key, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { TrialCountdown } from "@/components/TrialCountdown";
 import { FeatureComparisonModal } from "@/components/FeatureComparisonModal";
@@ -19,6 +19,7 @@ import { ExtensionWaitlistDialog } from "@/components/ExtensionWaitlistDialog";
 import { MockDataProvider, useMockData } from "@/contexts/MockDataContext";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { useTabActivity } from "@/hooks/useTabActivity";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +39,21 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+
+// Helper function to format time ago
+const formatTimeAgo = (date: Date): string => {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins} min ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  return date.toLocaleDateString();
+};
 
 // Mock data for demonstration
 const mockRecommendations = [
@@ -94,6 +110,10 @@ const DashboardContent = () => {
   const [waitlistJoined, setWaitlistJoined] = useState(false);
   const { isAdmin } = useAdminRole();
   const upgradeEmailSentRef = useRef(false);
+  
+  // Live tab data from extension
+  const { useMockData: isTestData, setUseMockData } = useMockData();
+  const { recentTabs: liveRecentTabs, archivedTabs: liveArchivedTabs, stats: liveStats, loading: tabsLoading, hasData: hasLiveData, refresh: refreshTabs } = useTabActivity();
 
   useEffect(() => {
     checkAuth();
@@ -291,25 +311,29 @@ const DashboardContent = () => {
           <Card className="shadow-card">
             <CardHeader className="pb-3">
               <CardDescription>Active Tabs</CardDescription>
-              <CardTitle className="text-3xl font-bold">24</CardTitle>
+              <CardTitle className="text-3xl font-bold">
+                {isTestData ? "24" : liveStats.totalTabs}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
                 <TrendingUp className="inline w-3 h-3 mr-1" />
-                8 more than yesterday
+                {isTestData ? "8 more than yesterday" : hasLiveData ? "From extension" : "Connect extension"}
               </p>
             </CardContent>
           </Card>
 
           <Card className="shadow-card">
             <CardHeader className="pb-3">
-              <CardDescription>Tabs Saved Today</CardDescription>
-              <CardTitle className="text-3xl font-bold">12</CardTitle>
+              <CardDescription>Top Domain</CardDescription>
+              <CardTitle className="text-3xl font-bold truncate">
+                {isTestData ? "12" : liveStats.topDomains[0]?.domain || "—"}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
                 <Sparkles className="inline w-3 h-3 mr-1" />
-                AI organized for you
+                {isTestData ? "AI organized for you" : liveStats.topDomains[0] ? `${liveStats.topDomains[0].count} tabs` : "No data yet"}
               </p>
             </CardContent>
           </Card>
@@ -317,7 +341,9 @@ const DashboardContent = () => {
           <Card className="shadow-card">
             <CardHeader className="pb-3">
               <CardDescription>Archived</CardDescription>
-              <CardTitle className="text-3xl font-bold">147</CardTitle>
+              <CardTitle className="text-3xl font-bold">
+                {isTestData ? "147" : liveStats.archivedTabs}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
@@ -329,13 +355,37 @@ const DashboardContent = () => {
 
           <Card className="shadow-card">
             <CardHeader className="pb-3">
-              <CardDescription>Time Saved</CardDescription>
-              <CardTitle className="text-3xl font-bold">2.4h</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardDescription>Extension Status</CardDescription>
+                {!isTestData && (
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={refreshTabs}>
+                    <RefreshCw className={`w-3 h-3 ${tabsLoading ? 'animate-spin' : ''}`} />
+                  </Button>
+                )}
+              </div>
+              <CardTitle className="text-3xl font-bold flex items-center gap-2">
+                {isTestData ? (
+                  <>
+                    <WifiOff className="w-6 h-6 text-muted-foreground" />
+                    <span className="text-lg">Test</span>
+                  </>
+                ) : hasLiveData ? (
+                  <>
+                    <Wifi className="w-6 h-6 text-primary" />
+                    <span className="text-lg text-primary">Live</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="w-6 h-6 text-accent" />
+                    <span className="text-lg text-accent">Waiting</span>
+                  </>
+                )}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
                 <Clock className="inline w-3 h-3 mr-1" />
-                This week
+                {isTestData ? "Using test data" : hasLiveData ? "Syncing with extension" : "No extension data yet"}
               </p>
             </CardContent>
           </Card>
@@ -441,48 +491,82 @@ const DashboardContent = () => {
 
                 {activeView === "recent" && (
                   <div className="space-y-3">
-                    {mockRecentTabs.map((tab) => (
-                      <div
-                        key={tab.id}
-                        className="p-4 rounded-lg border border-border hover:border-primary/50 transition-all cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">{tab.favicon}</span>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-medium truncate">{tab.title}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              Last accessed {tab.lastAccessed}
-                            </p>
-                          </div>
-                          <Button size="sm" variant="ghost">
-                            <ExternalLink className="w-4 h-4" />
-                          </Button>
-                        </div>
+                    {(isTestData ? mockRecentTabs : liveRecentTabs).length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <WifiOff className="w-8 h-8 mx-auto mb-3 opacity-50" />
+                        <p className="font-medium">No tab data yet</p>
+                        <p className="text-sm mt-1">
+                          {isTestData ? "Enable test data to see mock tabs" : "Install the extension and browse to sync tabs"}
+                        </p>
                       </div>
-                    ))}
+                    ) : (
+                      (isTestData ? mockRecentTabs : liveRecentTabs.map(tab => ({
+                        id: tab.id,
+                        title: tab.title || "Untitled",
+                        url: tab.url,
+                        favicon: tab.favicon_url || "🌐",
+                        lastAccessed: tab.last_visited_at ? formatTimeAgo(new Date(tab.last_visited_at)) : "Recently",
+                      }))).map((tab: any) => (
+                        <div
+                          key={tab.id}
+                          className="p-4 rounded-lg border border-border hover:border-primary/50 transition-all cursor-pointer"
+                          onClick={() => window.open(tab.url, '_blank')}
+                        >
+                          <div className="flex items-center gap-3">
+                            {typeof tab.favicon === 'string' && tab.favicon.startsWith('http') ? (
+                              <img src={tab.favicon} alt="" className="w-6 h-6 rounded" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                            ) : (
+                              <span className="text-2xl">{tab.favicon}</span>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-medium truncate">{tab.title}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                Last accessed {tab.lastAccessed}
+                              </p>
+                            </div>
+                            <Button size="sm" variant="ghost">
+                              <ExternalLink className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
 
                 {activeView === "archived" && (
                   <div className="space-y-3">
-                    {mockArchivedTabs.map((tab) => (
-                      <div
-                        key={tab.id}
-                        className="p-4 rounded-lg border border-border hover:border-primary/50 transition-all"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-medium">{tab.title}</h3>
-                            <p className="text-sm text-muted-foreground">
-                              Archived {tab.archivedDate}
-                            </p>
-                          </div>
-                          <Button size="sm" variant="outline">
-                            Restore
-                          </Button>
-                        </div>
+                    {(isTestData ? mockArchivedTabs : liveArchivedTabs).length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Archive className="w-8 h-8 mx-auto mb-3 opacity-50" />
+                        <p className="font-medium">No archived tabs</p>
+                        <p className="text-sm mt-1">Tabs you archive will appear here</p>
                       </div>
-                    ))}
+                    ) : (
+                      (isTestData ? mockArchivedTabs : liveArchivedTabs.map(tab => ({
+                        id: tab.id,
+                        title: tab.title || "Untitled",
+                        url: tab.url,
+                        archivedDate: tab.archived_at ? formatTimeAgo(new Date(tab.archived_at)) : "Recently",
+                      }))).map((tab: any) => (
+                        <div
+                          key={tab.id}
+                          className="p-4 rounded-lg border border-border hover:border-primary/50 transition-all"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <h3 className="font-medium">{tab.title}</h3>
+                              <p className="text-sm text-muted-foreground">
+                                Archived {tab.archivedDate}
+                              </p>
+                            </div>
+                            <Button size="sm" variant="outline" onClick={() => window.open(tab.url, '_blank')}>
+                              Restore
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -727,9 +811,9 @@ const DashboardContent = () => {
   );
 };
 
-// Admin Dashboard Section with mock data toggle
+// Admin Dashboard Section with data source toggle
 const AdminDashboardSection = () => {
-  const { useMockData: isMockData, setUseMockData } = useMockData();
+  const { useMockData: isTestData, setUseMockData } = useMockData();
   
   return (
     <Card className="shadow-card border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5 mb-6">
@@ -745,15 +829,19 @@ const AdminDashboardSection = () => {
             </div>
           </div>
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <FlaskConical className={`w-4 h-4 ${isMockData ? 'text-primary' : 'text-muted-foreground'}`} />
-              <Label htmlFor="mock-data-toggle" className="text-sm text-muted-foreground">
-                Test Data
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/50 border border-border">
+              {isTestData ? (
+                <FlaskConical className="w-4 h-4 text-primary" />
+              ) : (
+                <Wifi className="w-4 h-4 text-primary" />
+              )}
+              <Label htmlFor="mock-data-toggle" className="text-sm font-medium cursor-pointer">
+                {isTestData ? "Test Data" : "Live Data"}
               </Label>
               <Switch
                 id="mock-data-toggle"
-                checked={isMockData}
-                onCheckedChange={setUseMockData}
+                checked={!isTestData}
+                onCheckedChange={(checked) => setUseMockData(!checked)}
               />
             </div>
             <Link to="/admin">
