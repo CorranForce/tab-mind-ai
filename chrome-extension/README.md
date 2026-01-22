@@ -27,10 +27,19 @@ AI-powered tab organization that surfaces the tabs you need, when you need them.
 
 - `manifest.json` - Extension configuration
 - `background.js` - Service worker for tab tracking and API communication
+- `content.js` - Content script for auth session transfer from web app
 - `sidepanel.html` - Sidebar UI structure
 - `sidepanel.js` - Sidebar functionality
 - `styles.css` - Sidebar styling
 - `icons/` - Extension icons (need to be added)
+
+## Updating the Extension
+
+After making changes to the extension files:
+
+1. Go to `chrome://extensions`
+2. Click the refresh icon on the SmartTab AI card
+3. Reload any open web app tabs
 
 ## Required Backend Functions
 

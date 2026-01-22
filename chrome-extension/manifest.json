@@ -10,7 +10,9 @@
     "sidePanel"
   ],
   "host_permissions": [
-    "https://wjmkijvckvnrrsjzgwge.supabase.co/*"
+    "https://wjmkijvckvnrrsjzgwge.supabase.co/*",
+    "https://tab-mind-ai.lovable.app/*",
+    "https://*.lovable.app/*"
   ],
   "action": {
     "default_title": "SmartTab AI",
@@ -28,6 +30,16 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://tab-mind-ai.lovable.app/*",
+        "https://*.lovable.app/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ],
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
