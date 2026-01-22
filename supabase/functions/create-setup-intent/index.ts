@@ -80,9 +80,25 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    
+    // Map specific errors to safe client messages
+    let clientMessage = "An error occurred";
+    let statusCode = 500;
+    
+    if (errorMessage.includes("No authorization header")) {
+      clientMessage = "Authentication required";
+      statusCode = 401;
+    } else if (errorMessage.includes("Authentication error") || errorMessage.includes("email not available")) {
+      clientMessage = "Invalid authentication";
+      statusCode = 401;
+    } else if (errorMessage.includes("STRIPE_SECRET_KEY")) {
+      clientMessage = "Service configuration error";
+      statusCode = 500;
+    }
+    
+    return new Response(JSON.stringify({ error: clientMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+      status: statusCode,
     });
   }
 });
