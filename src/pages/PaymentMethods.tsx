@@ -19,7 +19,7 @@ import {
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || "");
+const stripePromise = loadStripe("pk_live_51J3qRXRbxIeMPlL2q5u6LpxPCOj56OpuZfcF46FUQsh26N5ztBq7SlpjS9ObhElci2M7gZjxLXUo2ZsjKQQlShWY00n1ZDBdPa");
 
 const cardElementOptions = {
   style: {
