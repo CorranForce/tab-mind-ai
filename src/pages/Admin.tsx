@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Brain, Users, Mail, Download, ArrowLeft, Loader2, Shield, FlaskConical } from "lucide-react";
+import { Brain, ArrowLeft, Loader2, Shield, FlaskConical, MessageSquare, Bug, HelpCircle } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -22,15 +22,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-interface WaitlistEntry {
+interface SupportTicket {
   id: string;
   email: string;
+  issue_type: string;
+  subject: string;
+  status: string;
   created_at: string;
-  user_id: string | null;
 }
 
 const AdminContent = () => {
-  const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
+  const [supportTickets, setSupportTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const { isAdmin, loading: checkingAdmin } = useAdminRole();
   const { toast } = useToast();
@@ -48,7 +50,7 @@ const AdminContent = () => {
 
   useEffect(() => {
     if (!checkingAdmin && isAdmin) {
-      loadWaitlist();
+      loadSupportTickets();
     } else if (!checkingAdmin && !isAdmin) {
       toast({
         title: "Access Denied",
@@ -59,49 +61,47 @@ const AdminContent = () => {
     }
   }, [isAdmin, checkingAdmin, navigate, toast]);
 
-  const loadWaitlist = async () => {
+  const loadSupportTickets = async () => {
     try {
       const { data, error } = await supabase
-        .from("extension_waitlist")
-        .select("*")
-        .order("created_at", { ascending: false });
+        .from("support_tickets")
+        .select("id, email, issue_type, subject, status, created_at")
+        .order("created_at", { ascending: false })
+        .limit(20);
 
       if (error) throw error;
-      setWaitlist(data || []);
+      setSupportTickets(data || []);
     } catch (error: any) {
-      console.error("Error loading waitlist:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load waitlist data.",
-        variant: "destructive",
-      });
+      console.error("Error loading support tickets:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const exportWaitlist = () => {
-    const csv = [
-      ["Email", "Signed Up", "Has Account"],
-      ...waitlist.map(entry => [
-        entry.email,
-        new Date(entry.created_at).toLocaleString(),
-        entry.user_id ? "Yes" : "No"
-      ])
-    ].map(row => row.join(",")).join("\n");
+  const getIssueTypeIcon = (type: string) => {
+    switch (type) {
+      case "bug":
+        return <Bug className="w-4 h-4 text-destructive" />;
+      case "help":
+        return <HelpCircle className="w-4 h-4 text-primary" />;
+      case "feedback":
+        return <MessageSquare className="w-4 h-4 text-accent" />;
+      default:
+        return <MessageSquare className="w-4 h-4" />;
+    }
+  };
 
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `waitlist-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    toast({
-      title: "Exported",
-      description: `${waitlist.length} entries exported to CSV.`,
-    });
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "open":
+        return <Badge variant="destructive">Open</Badge>;
+      case "in_progress":
+        return <Badge variant="default">In Progress</Badge>;
+      case "resolved":
+        return <Badge variant="secondary">Resolved</Badge>;
+      default:
+        return <Badge variant="outline">{status}</Badge>;
+    }
   };
 
   if (checkingAdmin) {
@@ -161,43 +161,45 @@ const AdminContent = () => {
         <div className="grid md:grid-cols-3 gap-6 mb-8">
           <Card className="shadow-card">
             <CardHeader className="pb-3">
-              <CardDescription>Total Waitlist</CardDescription>
-              <CardTitle className="text-3xl font-bold">{waitlist.length}</CardTitle>
+              <CardDescription>Open Tickets</CardDescription>
+              <CardTitle className="text-3xl font-bold">
+                {supportTickets.filter(t => t.status === "open").length}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
-                <Mail className="inline w-3 h-3 mr-1" />
-                Emails collected
+                <Bug className="inline w-3 h-3 mr-1" />
+                Require attention
               </p>
             </CardContent>
           </Card>
 
           <Card className="shadow-card">
             <CardHeader className="pb-3">
-              <CardDescription>Registered Users</CardDescription>
+              <CardDescription>In Progress</CardDescription>
               <CardTitle className="text-3xl font-bold">
-                {waitlist.filter(e => e.user_id).length}
+                {supportTickets.filter(t => t.status === "in_progress").length}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
-                <Users className="inline w-3 h-3 mr-1" />
-                Have accounts
+                <HelpCircle className="inline w-3 h-3 mr-1" />
+                Being handled
               </p>
             </CardContent>
           </Card>
 
           <Card className="shadow-card">
             <CardHeader className="pb-3">
-              <CardDescription>Guest Signups</CardDescription>
+              <CardDescription>Total Tickets</CardDescription>
               <CardTitle className="text-3xl font-bold">
-                {waitlist.filter(e => !e.user_id).length}
+                {supportTickets.length}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xs text-muted-foreground">
-                <Mail className="inline w-3 h-3 mr-1" />
-                No account yet
+                <MessageSquare className="inline w-3 h-3 mr-1" />
+                All time
               </p>
             </CardContent>
           </Card>
@@ -212,17 +214,16 @@ const AdminContent = () => {
         {/* Subscription Management */}
         <SubscriptionManager />
 
-        {/* Waitlist Table */}
+        {/* Support Tickets Table */}
         <Card className="shadow-card mt-8">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Extension Waitlist</CardTitle>
-                <CardDescription>Users waiting for the browser extension</CardDescription>
+                <CardTitle>Support Tickets</CardTitle>
+                <CardDescription>Recent bug reports and support requests</CardDescription>
               </div>
-              <Button onClick={exportWaitlist} variant="outline" size="sm">
-                <Download className="w-4 h-4 mr-2" />
-                Export CSV
+              <Button onClick={loadSupportTickets} variant="outline" size="sm">
+                Refresh
               </Button>
             </div>
           </CardHeader>
@@ -231,31 +232,36 @@ const AdminContent = () => {
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
-            ) : waitlist.length === 0 ? (
+            ) : supportTickets.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No waitlist entries yet.
+                No support tickets yet.
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Subject</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Signed Up</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {waitlist.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell className="font-medium">{entry.email}</TableCell>
-                      <TableCell>{new Date(entry.created_at).toLocaleDateString()}</TableCell>
+                  {supportTickets.map((ticket) => (
+                    <TableRow key={ticket.id}>
                       <TableCell>
-                        {entry.user_id ? (
-                          <Badge variant="default">Registered</Badge>
-                        ) : (
-                          <Badge variant="secondary">Guest</Badge>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {getIssueTypeIcon(ticket.issue_type)}
+                          <span className="capitalize">{ticket.issue_type}</span>
+                        </div>
                       </TableCell>
+                      <TableCell className="font-medium max-w-xs truncate">
+                        {ticket.subject}
+                      </TableCell>
+                      <TableCell>{ticket.email}</TableCell>
+                      <TableCell>{getStatusBadge(ticket.status)}</TableCell>
+                      <TableCell>{new Date(ticket.created_at).toLocaleDateString()}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
