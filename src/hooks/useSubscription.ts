@@ -3,8 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const STRIPE_PRODUCTS = {
   pro: {
-    price_id: "price_1SYUAcKq904QPKp45gvjL9Cg",
-    product_id: "prod_TVVAI2BQPBNmIf",
+    price_id: "price_1SwNU8Kq904QPKp4UB0I3FjZ",
+    product_id: "prod_TuBr5EopS18Z1S",
   },
   enterprise: {
     price_id: "price_1Sp9WrKq904QPKp4Qy5SjPgK",
