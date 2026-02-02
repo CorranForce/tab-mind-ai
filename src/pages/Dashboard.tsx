@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Mail, Check, Shield, FlaskConical, Key, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, User, LogOut, Settings, Crown, Loader2, Lock, Shield, FlaskConical, Key, RefreshCw, Wifi, WifiOff, HelpCircle } from "lucide-react";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { TrialCountdown } from "@/components/TrialCountdown";
 import { FeatureComparisonModal } from "@/components/FeatureComparisonModal";
@@ -12,10 +11,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAdminRole } from "@/hooks/useAdminRole";
+import { usePlatformOwner } from "@/hooks/usePlatformOwner";
 import { AdminAccountManagerCard } from "@/components/admin/AdminAccountManagerCard";
 import { AdminRevenueCard } from "@/components/admin/AdminRevenueCard";
 import { PlatformOwnerOrProCard } from "@/components/PlatformOwnerOrProCard";
-import { ExtensionWaitlistDialog } from "@/components/ExtensionWaitlistDialog";
 import { MockDataProvider, useMockData } from "@/contexts/MockDataContext";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -105,15 +104,16 @@ const DashboardContent = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { isPro, isEnterprise, subscriptionEnd, openCustomerPortal, checkSubscription, createCheckout } = useSubscription();
   const [skipTrialLoading, setSkipTrialLoading] = useState(false);
-  const [waitlistEmail, setWaitlistEmail] = useState("");
-  const [waitlistLoading, setWaitlistLoading] = useState(false);
-  const [waitlistJoined, setWaitlistJoined] = useState(false);
   const { isAdmin } = useAdminRole();
+  const { isPlatformOwner } = usePlatformOwner();
   const upgradeEmailSentRef = useRef(false);
   
   // Live tab data from extension
   const { useMockData: isTestData, setUseMockData } = useMockData();
   const { recentTabs: liveRecentTabs, archivedTabs: liveArchivedTabs, stats: liveStats, loading: tabsLoading, hasData: hasLiveData, refresh: refreshTabs } = useTabActivity();
+
+  // Platform owner has full access to all features
+  const hasFullAccess = isPlatformOwner || isPro || isEnterprise;
 
   useEffect(() => {
     checkAuth();
@@ -251,6 +251,12 @@ const DashboardContent = () => {
             <Link to="/pricing">
               <Button variant="ghost" size="sm">Pricing</Button>
             </Link>
+            <Link to="/support">
+              <Button variant="ghost" size="sm">
+                <HelpCircle className="w-4 h-4 mr-2" />
+                Support
+              </Button>
+            </Link>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm">
@@ -273,7 +279,7 @@ const DashboardContent = () => {
                     Payment Methods
                   </Link>
                 </DropdownMenuItem>
-                {isEnterprise && (
+                {(isEnterprise || isPlatformOwner) && (
                   <DropdownMenuItem asChild>
                     <Link to="/api-access" className="flex items-center cursor-pointer">
                       <Key className="w-4 h-4 mr-2" />
@@ -296,11 +302,6 @@ const DashboardContent = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <ExtensionWaitlistDialog>
-              <Button variant="outline" size="sm">
-                Get Extension
-              </Button>
-            </ExtensionWaitlistDialog>
           </nav>
         </div>
       </header>
@@ -438,7 +439,7 @@ const DashboardContent = () => {
               <CardContent>
                 {activeView === "recommendations" && (
                   <div className="space-y-4">
-                    {(isPro ? mockRecommendations : mockRecommendations.slice(0, 1)).map((tab) => (
+                    {(hasFullAccess ? mockRecommendations : mockRecommendations.slice(0, 1)).map((tab) => (
                       <div
                         key={tab.id}
                         className="p-4 rounded-lg border border-border hover:border-primary/50 transition-all hover:shadow-glow cursor-pointer group"
@@ -454,36 +455,23 @@ const DashboardContent = () => {
                                 {Math.round(tab.score * 100)}% match
                               </Badge>
                             </div>
-                            <p className="text-sm text-muted-foreground truncate mb-2">
-                              {tab.url}
-                            </p>
-                            <p className="text-sm text-accent flex items-center gap-1">
-                              <Sparkles className="w-3 h-3" />
-                              {tab.reason}
-                            </p>
+                            <p className="text-sm text-muted-foreground">{tab.reason}</p>
                           </div>
-                          <Button size="sm" variant="ghost">
+                          <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity">
                             <ExternalLink className="w-4 h-4" />
                           </Button>
                         </div>
                       </div>
                     ))}
-                    {!isPro && (
-                      <div 
-                        className="p-4 rounded-lg border border-dashed border-primary/30 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors"
-                        onClick={() => setShowUpgradeModal(true)}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Lock className="w-5 h-5 text-primary" />
-                          <div className="flex-1">
-                            <p className="text-sm font-medium">2 more recommendations available</p>
-                            <p className="text-xs text-muted-foreground">Upgrade to Pro for unlimited AI recommendations</p>
-                          </div>
-                          <Button size="sm">
-                            <Crown className="w-4 h-4 mr-2" />
-                            Upgrade
-                          </Button>
-                        </div>
+                    {!hasFullAccess && (
+                      <div className="p-4 rounded-lg border border-dashed border-primary/30 bg-primary/5 text-center">
+                        <Lock className="w-6 h-6 mx-auto mb-2 text-primary" />
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Upgrade to see all recommendations
+                        </p>
+                        <Button size="sm" variant="outline" onClick={() => setShowUpgradeModal(true)}>
+                          View Plans
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -493,10 +481,10 @@ const DashboardContent = () => {
                   <div className="space-y-3">
                     {(isTestData ? mockRecentTabs : liveRecentTabs).length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
-                        <WifiOff className="w-8 h-8 mx-auto mb-3 opacity-50" />
-                        <p className="font-medium">No tab data yet</p>
+                        <Clock className="w-8 h-8 mx-auto mb-3 opacity-50" />
+                        <p className="font-medium">No recent tabs</p>
                         <p className="text-sm mt-1">
-                          {isTestData ? "Enable test data to see mock tabs" : "Install the extension and browse to sync tabs"}
+                          {isTestData ? "Switch to live data to see extension tabs" : "Tabs from your extension will appear here"}
                         </p>
                       </div>
                     ) : (
@@ -575,7 +563,7 @@ const DashboardContent = () => {
 
           {/* Right Column - AI Insights */}
           <div className="space-y-6">
-            {isPro ? (
+            {hasFullAccess ? (
               <Card className="shadow-card border-accent/20">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -615,112 +603,17 @@ const DashboardContent = () => {
               <TrialCountdown trialEndsAt={subscription.trial_ends_at} />
             )}
 
-            <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle>Extension Status</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="p-4 rounded-lg bg-muted/50 border border-border">
-                  <p className="text-sm text-muted-foreground mb-3 text-center">
-                    Browser extension coming soon!
-                  </p>
-                  {waitlistJoined ? (
-                    <div className="flex items-center justify-center gap-2 text-sm text-primary py-2">
-                      <Check className="w-4 h-4" />
-                      <span>You're on the waitlist!</span>
-                    </div>
-                  ) : (
-                    <form 
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        if (!waitlistEmail.trim()) return;
-                        
-                        setWaitlistLoading(true);
-                        try {
-                          const { data: { user } } = await supabase.auth.getUser();
-                          const { error } = await supabase
-                            .from("extension_waitlist")
-                            .insert({ 
-                              email: waitlistEmail.trim(),
-                              user_id: user?.id || null
-                            });
-                          
-                          if (error) {
-                            if (error.code === "23505") {
-                              toast({
-                                title: "Already on waitlist",
-                                description: "This email is already registered for the waitlist.",
-                              });
-                              setWaitlistJoined(true);
-                            } else {
-                              throw error;
-                            }
-                          } else {
-                            // Send confirmation email
-                            supabase.functions.invoke("send-waitlist-confirmation", {
-                              body: { email: waitlistEmail.trim() }
-                            }).catch(err => console.error("Failed to send confirmation email:", err));
-                            
-                            toast({
-                              title: "You're on the list!",
-                              description: "We'll notify you when the extension launches. Check your email for confirmation.",
-                            });
-                            setWaitlistJoined(true);
-                          }
-                        } catch (error: any) {
-                          toast({
-                            title: "Error",
-                            description: "Failed to join waitlist. Please try again.",
-                            variant: "destructive",
-                          });
-                        } finally {
-                          setWaitlistLoading(false);
-                        }
-                      }}
-                      className="space-y-2"
-                    >
-                      <Input
-                        type="email"
-                        placeholder="Enter your email"
-                        value={waitlistEmail}
-                        onChange={(e) => setWaitlistEmail(e.target.value)}
-                        required
-                        className="text-sm"
-                      />
-                      <Button 
-                        type="submit" 
-                        className="w-full" 
-                        size="sm"
-                        disabled={waitlistLoading}
-                      >
-                        {waitlistLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Joining...
-                          </>
-                        ) : (
-                          <>
-                            <Mail className="w-4 h-4 mr-2" />
-                            Join Waitlist
-                          </>
-                        )}
-                      </Button>
-                    </form>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {isPro && (
+            {/* Platform Owner or Pro Card */}
+            {(isPlatformOwner || isPro) && (
               <PlatformOwnerOrProCard 
-                isAdmin={isAdmin}
+                isAdmin={isPlatformOwner}
                 subscriptionEnd={subscriptionEnd}
                 portalLoading={portalLoading}
                 handleManageSubscription={handleManageSubscription}
               />
             )}
 
-            {!loading && !isPro && subscription && subscription.status === "trial" && (
+            {!loading && !hasFullAccess && subscription && subscription.status === "trial" && (
               <Card className="shadow-card border-destructive/20">
                 <CardHeader>
                   <CardTitle>Trial Status</CardTitle>
@@ -741,7 +634,7 @@ const DashboardContent = () => {
                       onClick={async () => {
                         setSkipTrialLoading(true);
                         try {
-                          await createCheckout("price_1SYUAcKq904QPKp45gvjL9Cg");
+                          await createCheckout("price_1SwNU8Kq904QPKp4UB0I3FjZ");
                         } catch (error: any) {
                           toast({
                             title: "Error",
