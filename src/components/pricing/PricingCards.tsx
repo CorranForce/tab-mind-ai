@@ -42,7 +42,7 @@ export const PricingCards = ({
     },
     {
       name: "Pro",
-      price: "$12",
+      price: "$37",
       period: "per month",
       description: "For power users who need advanced features",
       features: [
