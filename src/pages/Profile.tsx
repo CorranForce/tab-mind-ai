@@ -3,10 +3,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Brain, User, Mail, Lock, ArrowLeft } from "lucide-react";
+import { Brain, User, Lock, ArrowLeft } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { usePasswordCheck } from "@/hooks/usePasswordCheck";
 
 const Profile = () => {
   const [loading, setLoading] = useState(true);
@@ -17,6 +18,7 @@ const Profile = () => {
   const [updating, setUpdating] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { checkPasswordBreached, isChecking } = usePasswordCheck();
 
   useEffect(() => {
     checkAuth();
@@ -111,6 +113,18 @@ const Profile = () => {
     setUpdating(true);
 
     try {
+      // Check if password has been exposed in data breaches
+      const breachResult = await checkPasswordBreached(newPassword);
+      if (breachResult.breached) {
+        toast({
+          title: "Compromised Password",
+          description: `This password has been exposed in ${breachResult.count?.toLocaleString() || 'multiple'} data breaches. Please choose a different password.`,
+          variant: "destructive",
+        });
+        setUpdating(false);
+        return;
+      }
+
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
@@ -241,8 +255,8 @@ const Profile = () => {
                         minLength={6}
                       />
                     </div>
-                    <Button type="submit" disabled={updating}>
-                      {updating ? "Updating..." : "Change Password"}
+                    <Button type="submit" disabled={updating || isChecking}>
+                      {isChecking ? "Checking security..." : updating ? "Updating..." : "Change Password"}
                     </Button>
                   </form>
                 </CardContent>
