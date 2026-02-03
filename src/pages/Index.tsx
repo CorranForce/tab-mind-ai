@@ -1,10 +1,68 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ArrowRight, Brain, Zap, TrendingUp, Shield } from "lucide-react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useSubscription, STRIPE_PRODUCTS } from "@/hooks/useSubscription";
+import { toast } from "sonner";
+import { PricingCards } from "@/components/pricing/PricingCards";
+import { FeatureComparison } from "@/components/pricing/FeatureComparison";
+import { PricingFAQ } from "@/components/pricing/PricingFAQ";
 
 const Index = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { isPro, isEnterprise, loading: subscriptionLoading, createCheckout } = useSubscription();
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    setIsAuthenticated(!!session);
+  };
+
+  const handleSubscribe = async (planName: string) => {
+    if (!isAuthenticated) {
+      window.location.href = "/auth";
+      return;
+    }
+
+    if (planName === "Pro") {
+      setCheckoutLoading("Pro");
+      try {
+        await createCheckout(STRIPE_PRODUCTS.pro.price_id);
+      } catch (error) {
+        console.error("Checkout error:", error);
+        toast.error("Failed to start checkout. Please try again.");
+      } finally {
+        setCheckoutLoading(null);
+      }
+    } else if (planName === "Enterprise") {
+      setCheckoutLoading("Enterprise");
+      try {
+        await createCheckout(STRIPE_PRODUCTS.enterprise.price_id);
+      } catch (error) {
+        console.error("Checkout error:", error);
+        toast.error("Failed to start checkout. Please try again.");
+      } finally {
+        setCheckoutLoading(null);
+      }
+    }
+  };
+
+  const scrollToSection = (e: React.MouseEvent<HTMLAnchorElement>, sectionId: string) => {
+    e.preventDefault();
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-subtle">
+    <div className="min-h-screen bg-gradient-subtle scroll-smooth">
       {/* Header */}
       <header className="border-b border-border/50 backdrop-blur-sm bg-background/80 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -15,9 +73,27 @@ const Index = () => {
             <span className="font-bold text-xl">SmartTab AI</span>
           </div>
           <nav className="hidden md:flex items-center gap-6">
-            <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Features</a>
-            <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">How It Works</a>
-            <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
+            <a 
+              href="#features" 
+              onClick={(e) => scrollToSection(e, 'features')}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Features
+            </a>
+            <a 
+              href="#how-it-works" 
+              onClick={(e) => scrollToSection(e, 'how-it-works')}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              How It Works
+            </a>
+            <a 
+              href="#pricing" 
+              onClick={(e) => scrollToSection(e, 'pricing')}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Pricing
+            </a>
           </nav>
           <div className="flex items-center gap-3">
             <Link to="/auth">
@@ -62,7 +138,7 @@ const Index = () => {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="container mx-auto px-4 py-20">
+      <section id="features" className="container mx-auto px-4 py-20 scroll-mt-20">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-4">Intelligent Tab Management</h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
@@ -134,7 +210,7 @@ const Index = () => {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="container mx-auto px-4 py-20">
+      <section id="how-it-works" className="container mx-auto px-4 py-20 scroll-mt-20">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold mb-4">How It Works</h2>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
@@ -179,6 +255,34 @@ const Index = () => {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section id="pricing" className="container mx-auto px-4 py-20 scroll-mt-20">
+        <div className="max-w-3xl mx-auto text-center mb-16">
+          <Badge className="mb-4 bg-primary/10 text-primary border-primary/20">
+            Pricing Plans
+          </Badge>
+          <h2 className="text-4xl md:text-5xl font-bold mb-6">
+            Choose Your Plan
+          </h2>
+          <p className="text-xl text-muted-foreground">
+            Start free, upgrade as you grow. All plans include 14-day free trial.
+          </p>
+        </div>
+
+        <PricingCards
+          isAuthenticated={isAuthenticated}
+          isPro={isPro}
+          isEnterprise={isEnterprise}
+          subscriptionLoading={subscriptionLoading}
+          checkoutLoading={checkoutLoading}
+          onSubscribe={handleSubscribe}
+        />
+
+        <FeatureComparison />
+
+        <PricingFAQ />
       </section>
 
       {/* CTA Section */}
