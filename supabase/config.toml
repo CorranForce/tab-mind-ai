@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.get-payment-methods]
 verify_jwt = false
+
+[functions.check-admin]
+verify_jwt = false
