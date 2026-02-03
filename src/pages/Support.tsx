@@ -60,35 +60,32 @@ const Support = () => {
     setLoading(true);
     
     try {
-      // Get current user if logged in
+      // Get current user - authentication is required
       const { data: { user } } = await supabase.auth.getUser();
-
-      // Insert support ticket into database using RPC to bypass type checking
-      const { error } = await supabase.rpc('submit_support_ticket' as any, {
-        p_user_id: user?.id || null,
-        p_email: email,
-        p_issue_type: issueType,
-        p_subject: subject,
-        p_description: description,
-      });
-
-      // Fallback: direct insert if RPC doesn't exist
-      if (error && error.message.includes('function')) {
-        const { error: insertError } = await supabase
-          .from('support_tickets' as any)
-          .insert({
-            user_id: user?.id || null,
-            email: email,
-            issue_type: issueType,
-            subject,
-            description,
-            status: 'open',
-          });
-        
-        if (insertError) throw insertError;
-      } else if (error) {
-        throw error;
+      
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to submit a support ticket.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
       }
+
+      // Insert support ticket into database
+      const { error } = await supabase
+        .from('support_tickets')
+        .insert({
+          user_id: user.id,
+          email: email,
+          issue_type: issueType,
+          subject,
+          description,
+          status: 'open',
+        });
+      
+      if (error) throw error;
 
       setSubmitted(true);
       toast({
