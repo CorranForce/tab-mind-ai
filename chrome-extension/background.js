@@ -12,6 +12,64 @@ let activeTabStartTime = null;
 // Initialize side panel behavior
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
+// Initialize: Scan all existing tabs on extension load/wake
+async function initializeExistingTabs() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const now = Date.now();
+    
+    for (const tab of tabs) {
+      // Skip chrome:// and extension pages
+      if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+        continue;
+      }
+      
+      // Only add if not already tracked
+      if (!tabActivity.has(tab.id)) {
+        tabActivity.set(tab.id, {
+          id: tab.id,
+          url: tab.url,
+          title: tab.title || 'Untitled',
+          favIconUrl: tab.favIconUrl,
+          visits: 1,
+          totalTime: 0,
+          lastVisit: now,
+          firstVisit: now
+        });
+      }
+    }
+    
+    // Get the currently active tab and set it for time tracking
+    const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (activeTabs.length > 0 && activeTabs[0].id) {
+      activeTabId = activeTabs[0].id;
+      activeTabStartTime = Date.now();
+    }
+    
+    console.log(`SmartTab AI: Initialized ${tabActivity.size} existing tabs`);
+    
+    // Trigger sync if we have a session
+    debouncedSync();
+  } catch (error) {
+    console.error('Error initializing existing tabs:', error);
+  }
+}
+
+// Run initialization immediately
+initializeExistingTabs();
+
+// Also re-initialize when service worker wakes up (handles browser restart scenarios)
+chrome.runtime.onStartup.addListener(() => {
+  console.log('SmartTab AI: Browser started, re-scanning tabs');
+  initializeExistingTabs();
+});
+
+// Re-initialize when extension is installed or updated
+chrome.runtime.onInstalled.addListener(() => {
+  console.log('SmartTab AI: Extension installed/updated, scanning tabs');
+  initializeExistingTabs();
+});
+
 // Track tab activation
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   // Update time spent on previous tab
@@ -153,13 +211,42 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'GET_ALL_TABS') {
     chrome.tabs.query({}, (tabs) => {
+      const now = Date.now();
       const enrichedTabs = tabs
         .filter(tab => !tab.url?.startsWith('chrome://') && !tab.url?.startsWith('chrome-extension://'))
-        .map(tab => ({
-          ...tab,
-          activity: tabActivity.get(tab.id) || null
-        }));
+        .map(tab => {
+          // Auto-populate tabActivity if tab is missing (handles tabs opened while service worker was asleep)
+          if (!tabActivity.has(tab.id) && tab.url) {
+            tabActivity.set(tab.id, {
+              id: tab.id,
+              url: tab.url,
+              title: tab.title || 'Untitled',
+              favIconUrl: tab.favIconUrl,
+              visits: 1,
+              totalTime: 0,
+              lastVisit: now,
+              firstVisit: now
+            });
+          }
+          
+          return {
+            ...tab,
+            activity: tabActivity.get(tab.id) || null
+          };
+        });
       sendResponse(enrichedTabs);
+      
+      // Trigger sync after populating new tabs
+      if (enrichedTabs.length > 0) {
+        debouncedSync();
+      }
+    });
+    return true;
+  }
+
+  if (message.type === 'REFRESH_TABS') {
+    initializeExistingTabs().then(() => {
+      sendResponse({ success: true, count: tabActivity.size });
     });
     return true;
   }
