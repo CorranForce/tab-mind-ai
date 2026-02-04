@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { PricingCards } from "@/components/pricing/PricingCards";
 import { FeatureComparison } from "@/components/pricing/FeatureComparison";
 import { PricingFAQ } from "@/components/pricing/PricingFAQ";
+import { ScrollToTopButton } from "@/components/ScrollToTopButton";
 
 const Index = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -318,6 +319,8 @@ const Index = () => {
           </div>
         </div>
       </footer>
+
+      <ScrollToTopButton />
     </div>
   );
 };
