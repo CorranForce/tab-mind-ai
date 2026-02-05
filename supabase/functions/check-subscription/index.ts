@@ -69,7 +69,7 @@ serve(async (req) => {
       // For admin-granted subs, use a special product ID to indicate pro access
       return new Response(JSON.stringify({
         subscribed: true,
-        product_id: "prod_TVVAI2BQPBNmIf", // Pro product ID
+        product_id: "prod_TvKapBPJXyIQDa", // Pro product ID
         subscription_end: dbSubscription.current_period_end
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

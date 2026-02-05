@@ -156,6 +156,76 @@ serve(async (req) => {
     }
     logStep("Payment method saved to database");
 
+    // Send email notification for new payment method
+    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+    if (RESEND_API_KEY && user.email) {
+      try {
+        const emailHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 40px 20px; }
+              .header { text-align: center; margin-bottom: 40px; }
+              .logo { font-size: 32px; font-weight: bold; color: #7c3aed; }
+              .content { background: #f8fafc; border-radius: 12px; padding: 32px; margin-bottom: 32px; }
+              .card-info { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin: 16px 0; }
+              .footer { text-align: center; color: #64748b; font-size: 14px; margin-top: 40px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <div class="logo">SmartTab AI</div>
+              </div>
+              
+              <h1 style="text-align: center; margin-bottom: 24px;">Payment Method Added ✓</h1>
+              
+              <div class="content">
+                <p>A new payment method has been added to your account.</p>
+                
+                <div class="card-info">
+                  <strong>${paymentMethod.card.brand?.toUpperCase() || 'Card'}</strong> ending in ${paymentMethod.card.last4}
+                  <br>
+                  Expires: ${paymentMethod.card.exp_month}/${paymentMethod.card.exp_year}
+                </div>
+                
+                <p>If you did not add this payment method, please contact support immediately.</p>
+              </div>
+              
+              <div class="footer">
+                <p>© ${new Date().getFullYear()} SmartTab AI. All rights reserved.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+
+        const emailResponse = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "SmartTab AI <onboarding@resend.dev>",
+            to: [user.email],
+            subject: "Payment Method Added to Your Account",
+            html: emailHtml,
+          }),
+        });
+
+        if (emailResponse.ok) {
+          logStep("Confirmation email sent");
+        } else {
+          logStep("Failed to send confirmation email");
+        }
+      } catch (emailError) {
+        logStep("Email send error", { error: emailError instanceof Error ? emailError.message : String(emailError) });
+      }
+    }
+
     return new Response(
       JSON.stringify({ success: true }),
       {
