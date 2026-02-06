@@ -78,6 +78,37 @@ serve(async (req) => {
 
     logStep("API key validated", { keyId: keyData.id, userId: keyData.user_id, keyName: keyData.name });
 
+    // Rate limiting: 100 requests per 60 seconds per API key
+    const { data: rateLimitResult, error: rateLimitError } = await supabaseAdmin
+      .rpc("check_rate_limit", {
+        p_identifier: keyData.id,
+        p_endpoint: "api-authenticate",
+        p_max_requests: 100,
+        p_window_seconds: 60,
+      });
+
+    if (rateLimitError) {
+      logStep("Rate limit check failed", { error: rateLimitError.message });
+    } else if (rateLimitResult && !rateLimitResult.allowed) {
+      logStep("Rate limit exceeded", { keyId: keyData.id, count: rateLimitResult.current_count });
+      return new Response(
+        JSON.stringify({
+          error: "Rate limit exceeded",
+          retry_after: rateLimitResult.retry_after,
+        }),
+        {
+          status: 429,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+            "Retry-After": String(rateLimitResult.retry_after),
+          },
+        }
+      );
+    } else {
+      logStep("Rate limit check passed", { remaining: rateLimitResult?.remaining });
+    }
+
     const startTime = Date.now();
 
     // Update last_used_at on the key
