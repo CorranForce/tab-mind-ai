@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.check-admin]
 verify_jwt = false
+
+[functions.api-authenticate]
+verify_jwt = false
