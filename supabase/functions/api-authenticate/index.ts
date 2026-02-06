@@ -12,6 +12,14 @@ const logStep = (step: string, details?: any) => {
   console.log(`[API-AUTHENTICATE] ${step}${detailsStr}`);
 };
 
+// Rate limits per subscription tier (requests per 60 seconds)
+const TIER_RATE_LIMITS: Record<string, number> = {
+  free: 20,
+  trial: 20,
+  pro: 100,
+  enterprise: 500,
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -78,12 +86,23 @@ serve(async (req) => {
 
     logStep("API key validated", { keyId: keyData.id, userId: keyData.user_id, keyName: keyData.name });
 
-    // Rate limiting: 100 requests per 60 seconds per API key
+    // Determine subscription tier for rate limiting
+    const { data: subData } = await supabaseAdmin
+      .from("subscriptions")
+      .select("status")
+      .eq("user_id", keyData.user_id)
+      .maybeSingle();
+
+    const tier = subData?.status || "free";
+    const maxRequests = TIER_RATE_LIMITS[tier] || TIER_RATE_LIMITS.free;
+    logStep("Tier-based rate limit", { tier, maxRequests });
+
+    // Rate limiting per API key based on subscription tier
     const { data: rateLimitResult, error: rateLimitError } = await supabaseAdmin
       .rpc("check_rate_limit", {
         p_identifier: keyData.id,
         p_endpoint: "api-authenticate",
-        p_max_requests: 100,
+        p_max_requests: maxRequests,
         p_window_seconds: 60,
       });
 
