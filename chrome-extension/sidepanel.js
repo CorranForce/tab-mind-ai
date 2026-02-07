@@ -187,7 +187,7 @@ function renderRecentTabs() {
     groupedTabs[domain].push(tab);
   });
   
-  // Sort groups by most recent activity
+  // Sort groups by most recent activity (show all groups)
   const sortedGroups = Object.entries(groupedTabs)
     .map(([domain, tabs]) => ({
       domain,
@@ -198,8 +198,7 @@ function renderRecentTabs() {
       }),
       latestVisit: Math.max(...tabs.map(t => t.activity?.lastVisit || 0))
     }))
-    .sort((a, b) => b.latestVisit - a.latestVisit)
-    .slice(0, 5);
+    .sort((a, b) => b.latestVisit - a.latestVisit);
   
   let html = '';
   sortedGroups.forEach(group => {
@@ -209,8 +208,7 @@ function renderRecentTabs() {
           <span class="tab-group-domain">${group.domain}</span>
           <span class="tab-group-count">${group.tabs.length}</span>
         </div>
-        ${group.tabs.slice(0, 3).map(tab => createTabElement(tab)).join('')}
-        ${group.tabs.length > 3 ? `<div class="tab-group-more">+${group.tabs.length - 3} more</div>` : ''}
+        ${group.tabs.map(tab => createTabElement(tab)).join('')}
       </div>
     `;
   });
@@ -431,10 +429,14 @@ if (searchInput) {
   });
 }
 
-// Refresh button
+// Refresh button - force re-scan then reload dashboard
 if (refreshBtn) {
   refreshBtn.addEventListener('click', async () => {
     refreshBtn.classList.add('spinning');
+    // Force background to re-scan all tabs first
+    await new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'REFRESH_TABS' }, resolve);
+    });
     await loadDashboard();
     setTimeout(() => refreshBtn.classList.remove('spinning'), 500);
   });

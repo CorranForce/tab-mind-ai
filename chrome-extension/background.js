@@ -18,14 +18,27 @@ async function initializeExistingTabs() {
     const tabs = await chrome.tabs.query({});
     const now = Date.now();
     
+    // Collect current tab IDs to prune stale entries
+    const currentTabIds = new Set();
+    
     for (const tab of tabs) {
       // Skip chrome:// and extension pages
-      if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+      if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('about:')) {
         continue;
       }
       
-      // Only add if not already tracked
-      if (!tabActivity.has(tab.id)) {
+      currentTabIds.add(tab.id);
+      
+      const existing = tabActivity.get(tab.id);
+      if (existing) {
+        // Update URL/title if they changed (e.g. navigated while worker was asleep)
+        tabActivity.set(tab.id, {
+          ...existing,
+          url: tab.url,
+          title: tab.title || existing.title || 'Untitled',
+          favIconUrl: tab.favIconUrl || existing.favIconUrl,
+        });
+      } else {
         tabActivity.set(tab.id, {
           id: tab.id,
           url: tab.url,
@@ -36,6 +49,13 @@ async function initializeExistingTabs() {
           lastVisit: now,
           firstVisit: now
         });
+      }
+    }
+    
+    // Prune tabs that no longer exist (closed while worker was asleep)
+    for (const tabId of tabActivity.keys()) {
+      if (!currentTabIds.has(tabId)) {
+        tabActivity.delete(tabId);
       }
     }
     
@@ -77,8 +97,13 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     updateTimeSpent(activeTabId);
   }
   
-  const tab = await chrome.tabs.get(activeInfo.tabId);
-  trackTabActivity(tab);
+  try {
+    const tab = await chrome.tabs.get(activeInfo.tabId);
+    trackTabActivity(tab);
+  } catch (e) {
+    // Tab may have been closed between event firing and get()
+    console.warn('Could not get activated tab:', e);
+  }
   
   // Set new active tab
   activeTabId = activeInfo.tabId;
@@ -92,6 +117,13 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 });
 
+// Track new tabs being created
+chrome.tabs.onCreated.addListener((tab) => {
+  if (tab.url) {
+    trackTabActivity(tab);
+  }
+});
+
 // Track when tabs are closed
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (activeTabId === tabId) {
@@ -99,6 +131,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     activeTabId = null;
     activeTabStartTime = null;
   }
+  tabActivity.delete(tabId);
 });
 
 // Update time spent on a tab
@@ -115,7 +148,7 @@ function updateTimeSpent(tabId) {
 
 // Track tab activity
 function trackTabActivity(tab) {
-  if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) {
+  if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('about:')) {
     return;
   }
 
@@ -129,8 +162,8 @@ function trackTabActivity(tab) {
   tabActivity.set(tab.id, {
     id: tab.id,
     url: tab.url,
-    title: tab.title,
-    favIconUrl: tab.favIconUrl,
+    title: tab.title || existing.title || 'Untitled',
+    favIconUrl: tab.favIconUrl || existing.favIconUrl,
     visits: existing.visits + 1,
     totalTime: existing.totalTime || 0,
     lastVisit: now,
@@ -210,30 +243,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'GET_ALL_TABS') {
-    chrome.tabs.query({}, (tabs) => {
+    // First re-scan all tabs to ensure tabActivity is fresh
+    chrome.tabs.query({}).then((tabs) => {
       const now = Date.now();
-      const enrichedTabs = tabs
-        .filter(tab => !tab.url?.startsWith('chrome://') && !tab.url?.startsWith('chrome-extension://'))
-        .map(tab => {
-          // Auto-populate tabActivity if tab is missing (handles tabs opened while service worker was asleep)
-          if (!tabActivity.has(tab.id) && tab.url) {
-            tabActivity.set(tab.id, {
-              id: tab.id,
-              url: tab.url,
-              title: tab.title || 'Untitled',
-              favIconUrl: tab.favIconUrl,
-              visits: 1,
-              totalTime: 0,
-              lastVisit: now,
-              firstVisit: now
-            });
-          }
-          
-          return {
-            ...tab,
-            activity: tabActivity.get(tab.id) || null
-          };
+      const currentTabIds = new Set();
+      
+      const enrichedTabs = [];
+      for (const tab of tabs) {
+        if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') || tab.url.startsWith('about:')) {
+          continue;
+        }
+        
+        currentTabIds.add(tab.id);
+        
+        // Always update/populate tabActivity for this tab
+        const existing = tabActivity.get(tab.id);
+        if (!existing) {
+          tabActivity.set(tab.id, {
+            id: tab.id,
+            url: tab.url,
+            title: tab.title || 'Untitled',
+            favIconUrl: tab.favIconUrl,
+            visits: 1,
+            totalTime: 0,
+            lastVisit: now,
+            firstVisit: now
+          });
+        } else {
+          // Update URL/title in case they changed
+          tabActivity.set(tab.id, {
+            ...existing,
+            url: tab.url,
+            title: tab.title || existing.title || 'Untitled',
+            favIconUrl: tab.favIconUrl || existing.favIconUrl,
+          });
+        }
+        
+        enrichedTabs.push({
+          ...tab,
+          activity: tabActivity.get(tab.id)
         });
+      }
+      
+      // Prune stale entries
+      for (const tabId of tabActivity.keys()) {
+        if (!currentTabIds.has(tabId)) {
+          tabActivity.delete(tabId);
+        }
+      }
+      
       sendResponse(enrichedTabs);
       
       // Trigger sync after populating new tabs
