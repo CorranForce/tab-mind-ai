@@ -313,6 +313,14 @@ const Index = () => {
               </div>
               <span className="font-bold text-xl">SmartTab AI</span>
             </div>
+            <div className="flex items-center gap-6">
+              <Link to="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Privacy Policy
+              </Link>
+              <Link to="/support" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Support
+              </Link>
+            </div>
             <p className="text-sm text-muted-foreground">
               © 2025 SmartTab AI. All rights reserved.
             </p>
