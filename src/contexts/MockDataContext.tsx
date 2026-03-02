@@ -12,7 +12,7 @@ const MockDataContext = createContext<MockDataContextType | undefined>(undefined
 export const MockDataProvider = ({ children }: { children: ReactNode }) => {
   const [useMockData, setUseMockDataState] = useState(() => {
     const stored = localStorage.getItem('admin-use-mock-data');
-    return stored !== null ? stored === 'true' : true;
+    return stored !== null ? stored === 'true' : false;
   });
   const [mockUserCount, setMockUserCount] = useState(15);
 
