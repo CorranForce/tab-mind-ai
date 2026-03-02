@@ -9,7 +9,8 @@
     "tabs",
     "storage",
     "activeTab",
-    "sidePanel"
+    "sidePanel",
+    "alarms"
   ],
   "host_permissions": [
     "https://wjmkijvckvnrrsjzgwge.supabase.co/*",
