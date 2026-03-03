@@ -20,6 +20,8 @@ const refreshBtn = document.getElementById('refresh-btn');
 let currentSession = null;
 let allTabs = [];
 let searchQuery = '';
+let liveRefreshTimeout = null;
+let tabListenersRegistered = false;
 
 // Initialize
 async function init() {
@@ -36,6 +38,7 @@ async function init() {
   
   // Listen for session updates from web app
   listenForWebAppSession();
+  setupRealtimeTabListeners();
 }
 
 // Show specific view
@@ -78,11 +81,48 @@ async function clearSession() {
   });
 }
 
-// Get all tabs
+// Get all tabs (merge background activity with direct browser tab query for reliability)
 async function getAllTabs() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: 'GET_ALL_TABS' }, resolve);
-  });
+  const [backgroundTabs, browserTabs] = await Promise.all([
+    new Promise((resolve) => {
+      chrome.runtime.sendMessage({ type: 'GET_ALL_TABS' }, (response) => {
+        resolve(Array.isArray(response) ? response : []);
+      });
+    }),
+    new Promise((resolve) => {
+      chrome.tabs.query({}, (tabs) => {
+        const normalizedTabs = (tabs || [])
+          .map((tab) => {
+            const url = tab.url || tab.pendingUrl || null;
+            if (!url) return null;
+            if (
+              url.startsWith('chrome://') ||
+              url.startsWith('chrome-extension://') ||
+              url.startsWith('about:') ||
+              url.startsWith('edge://')
+            ) {
+              return null;
+            }
+
+            return {
+              ...tab,
+              url,
+              title: tab.title || 'Untitled',
+              favIconUrl: tab.favIconUrl || null,
+            };
+          })
+          .filter(Boolean);
+
+        resolve(normalizedTabs);
+      });
+    }),
+  ]);
+
+  const activityById = new Map((backgroundTabs || []).map((tab) => [tab.id, tab.activity]));
+  return browserTabs.map((tab) => ({
+    ...tab,
+    activity: activityById.get(tab.id) || tab.activity || null,
+  }));
 }
 
 // Switch to tab
@@ -462,14 +502,40 @@ if (refreshBtn) {
   });
 }
 
-// Refresh data periodically
+function scheduleLiveRefresh(delay = 250) {
+  if (liveRefreshTimeout) clearTimeout(liveRefreshTimeout);
+
+  liveRefreshTimeout = setTimeout(async () => {
+    if (!currentSession) return;
+    allTabs = await getAllTabs();
+    renderRecentTabs();
+    renderStats(computeStatsFromTabs(allTabs));
+  }, delay);
+}
+
+function setupRealtimeTabListeners() {
+  if (tabListenersRegistered) return;
+  tabListenersRegistered = true;
+
+  chrome.tabs.onCreated.addListener(() => scheduleLiveRefresh());
+  chrome.tabs.onRemoved.addListener(() => scheduleLiveRefresh());
+  chrome.tabs.onActivated.addListener(() => scheduleLiveRefresh());
+  chrome.tabs.onReplaced.addListener(() => scheduleLiveRefresh());
+  chrome.tabs.onUpdated.addListener((_, changeInfo) => {
+    if (changeInfo.status === 'complete' || changeInfo.url || changeInfo.title || changeInfo.discarded !== undefined) {
+      scheduleLiveRefresh();
+    }
+  });
+}
+
+// Fallback polling (3s) in case realtime events are missed
 setInterval(async () => {
   if (currentSession) {
     allTabs = await getAllTabs();
     renderRecentTabs();
     renderStats(computeStatsFromTabs(allTabs));
   }
-}, 30000);
+}, 3000);
 
 // Initialize on load
 init();
