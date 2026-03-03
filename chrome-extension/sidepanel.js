@@ -15,6 +15,7 @@ const archivedToggle = document.getElementById('archived-toggle');
 const searchInput = document.getElementById('search-input');
 const statsContainer = document.getElementById('stats-container');
 const refreshBtn = document.getElementById('refresh-btn');
+const refreshIntervalSelect = document.getElementById('refresh-interval-select');
 
 // State
 let currentSession = null;
@@ -22,20 +23,28 @@ let allTabs = [];
 let searchQuery = '';
 let liveRefreshTimeout = null;
 let tabListenersRegistered = false;
+let autoRefreshIntervalMs = 3000;
+let autoRefreshTimer = null;
+
+const REFRESH_INTERVAL_OPTIONS = [1000, 3000, 5000];
 
 // Initialize
 async function init() {
   showView('loading');
-  
+
+  await initializeRefreshSettings();
+
   // Check for session
   currentSession = await getSession();
-  
+
   if (currentSession) {
     await loadDashboard();
+    startAutoRefresh({ immediate: true });
   } else {
     showView('login');
+    stopAutoRefresh();
   }
-  
+
   // Listen for session updates from web app
   listenForWebAppSession();
   setupRealtimeTabListeners();
@@ -158,6 +167,63 @@ async function getTabStats() {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ type: 'GET_TAB_STATS' }, resolve);
   });
+}
+
+// Get refresh interval setting
+async function getStoredRefreshInterval() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['refreshIntervalMs'], (result) => {
+      resolve(result.refreshIntervalMs);
+    });
+  });
+}
+
+// Save refresh interval setting
+async function setStoredRefreshInterval(intervalMs) {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set({ refreshIntervalMs: intervalMs }, resolve);
+  });
+}
+
+function normalizeRefreshInterval(value) {
+  const parsed = Number(value);
+  return REFRESH_INTERVAL_OPTIONS.includes(parsed) ? parsed : 3000;
+}
+
+async function initializeRefreshSettings() {
+  const storedInterval = await getStoredRefreshInterval();
+  autoRefreshIntervalMs = normalizeRefreshInterval(storedInterval);
+
+  if (refreshIntervalSelect) {
+    refreshIntervalSelect.value = String(autoRefreshIntervalMs);
+  }
+}
+
+async function refreshVisibleTabs() {
+  if (!currentSession) return;
+  allTabs = await getAllTabs();
+  renderRecentTabs();
+  renderStats(computeStatsFromTabs(allTabs));
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+}
+
+function startAutoRefresh({ immediate = true } = {}) {
+  stopAutoRefresh();
+  if (!currentSession) return;
+
+  if (immediate) {
+    refreshVisibleTabs();
+  }
+
+  autoRefreshTimer = setInterval(() => {
+    refreshVisibleTabs();
+  }, autoRefreshIntervalMs);
 }
 
 // Load dashboard data
@@ -425,7 +491,15 @@ function getDomain(url) {
     return new URL(url).hostname.replace('www.', '');
   } catch {
     return url;
-  }
+}
+
+// Auto-refresh interval setting
+if (refreshIntervalSelect) {
+  refreshIntervalSelect.addEventListener('change', async (e) => {
+    autoRefreshIntervalMs = normalizeRefreshInterval(e.target.value);
+    await setStoredRefreshInterval(autoRefreshIntervalMs);
+    startAutoRefresh({ immediate: false });
+  });
 }
 
 // Escape HTML
@@ -444,7 +518,8 @@ function listenForWebAppSession() {
       if (event.data.type === "AUTH_SESSION" && event.data.session) {
         await setSession(event.data.session);
         currentSession = event.data.session;
-        loadDashboard();
+        await loadDashboard();
+        startAutoRefresh({ immediate: false });
       }
     };
   } catch (e) {
@@ -452,15 +527,25 @@ function listenForWebAppSession() {
   }
   
   // Also listen for storage changes
-  chrome.storage.onChanged.addListener((changes, namespace) => {
+  chrome.storage.onChanged.addListener(async (changes, namespace) => {
     if (namespace === 'local' && changes.session) {
       if (changes.session.newValue) {
         currentSession = changes.session.newValue;
-        loadDashboard();
+        await loadDashboard();
+        startAutoRefresh({ immediate: false });
       } else {
         currentSession = null;
+        stopAutoRefresh();
         showView('login');
       }
+    }
+
+    if (namespace === 'sync' && changes.refreshIntervalMs) {
+      autoRefreshIntervalMs = normalizeRefreshInterval(changes.refreshIntervalMs.newValue);
+      if (refreshIntervalSelect) {
+        refreshIntervalSelect.value = String(autoRefreshIntervalMs);
+      }
+      startAutoRefresh({ immediate: false });
     }
   });
 }
@@ -473,6 +558,7 @@ loginBtn.addEventListener('click', () => {
 logoutBtn.addEventListener('click', async () => {
   await clearSession();
   currentSession = null;
+  stopAutoRefresh();
   showView('login');
 });
 
@@ -489,6 +575,15 @@ if (searchInput) {
   });
 }
 
+// Auto-refresh interval setting
+if (refreshIntervalSelect) {
+  refreshIntervalSelect.addEventListener('change', async (e) => {
+    autoRefreshIntervalMs = normalizeRefreshInterval(e.target.value);
+    await setStoredRefreshInterval(autoRefreshIntervalMs);
+    startAutoRefresh({ immediate: false });
+  });
+}
+
 // Refresh button - force re-scan then reload dashboard
 if (refreshBtn) {
   refreshBtn.addEventListener('click', async () => {
@@ -498,6 +593,7 @@ if (refreshBtn) {
       chrome.runtime.sendMessage({ type: 'REFRESH_TABS' }, resolve);
     });
     await loadDashboard();
+    startAutoRefresh({ immediate: false });
     setTimeout(() => refreshBtn.classList.remove('spinning'), 500);
   });
 }
@@ -506,10 +602,7 @@ function scheduleLiveRefresh(delay = 250) {
   if (liveRefreshTimeout) clearTimeout(liveRefreshTimeout);
 
   liveRefreshTimeout = setTimeout(async () => {
-    if (!currentSession) return;
-    allTabs = await getAllTabs();
-    renderRecentTabs();
-    renderStats(computeStatsFromTabs(allTabs));
+    await refreshVisibleTabs();
   }, delay);
 }
 
@@ -527,15 +620,6 @@ function setupRealtimeTabListeners() {
     }
   });
 }
-
-// Fallback polling (3s) in case realtime events are missed
-setInterval(async () => {
-  if (currentSession) {
-    allTabs = await getAllTabs();
-    renderRecentTabs();
-    renderStats(computeStatsFromTabs(allTabs));
-  }
-}, 3000);
 
 // Initialize on load
 init();
