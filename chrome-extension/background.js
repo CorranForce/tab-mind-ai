@@ -254,8 +254,54 @@ function debouncedSync() {
   syncTimeout = setTimeout(syncTabData, 3000); // Reduced from 5s to 3s
 }
 
+async function refreshSession(session) {
+  if (!session?.refresh_token) return null;
+  try {
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ refresh_token: session.refresh_token }),
+    });
+    if (!response.ok) {
+      console.error('SmartTab AI: Token refresh failed:', response.status);
+      return null;
+    }
+    const data = await response.json();
+    const newSession = {
+      access_token: data.access_token,
+      refresh_token: data.refresh_token,
+      expires_at: data.expires_at,
+      user: data.user,
+    };
+    await storeSession(newSession);
+    console.log('SmartTab AI: Session refreshed successfully');
+    return newSession;
+  } catch (error) {
+    console.error('SmartTab AI: Token refresh error:', error);
+    return null;
+  }
+}
+
+function isSessionExpired(session) {
+  if (!session?.expires_at) return true;
+  // Refresh if less than 60 seconds until expiry
+  return Date.now() / 1000 >= session.expires_at - 60;
+}
+
+async function getValidSession() {
+  let session = await getStoredSession();
+  if (!session) return null;
+  if (isSessionExpired(session)) {
+    session = await refreshSession(session);
+  }
+  return session;
+}
+
 async function syncTabData() {
-  const session = await getStoredSession();
+  const session = await getValidSession();
   if (!session) return;
 
   const tabs = Array.from(tabActivity.values());
@@ -271,6 +317,29 @@ async function syncTabData() {
       },
       body: JSON.stringify({ tabs }),
     });
+
+    if (response.status === 401) {
+      // Token rejected, try one refresh
+      const refreshed = await refreshSession(session);
+      if (refreshed) {
+        const retry = await fetch(`${SUPABASE_URL}/functions/v1/tabs-sync`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${refreshed.access_token}`,
+            'apikey': SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ tabs }),
+        });
+        if (retry.ok) {
+          const result = await retry.json();
+          console.log(`SmartTab AI: Synced ${result.synced} tabs (after refresh)`);
+        } else {
+          console.error('SmartTab AI: Sync failed after refresh:', retry.status);
+        }
+      }
+      return;
+    }
 
     if (response.ok) {
       const result = await response.json();
@@ -426,11 +495,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function getRecommendations(session) {
   if (!session) return { recommendations: [], archived: [] };
 
+  // Ensure token is valid
+  let validSession = session;
+  if (isSessionExpired(session)) {
+    validSession = await refreshSession(session);
+    if (!validSession) return { recommendations: [], archived: [] };
+  }
+
   try {
     const response = await fetch(`${SUPABASE_URL}/functions/v1/tabs-recommend`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${session.access_token}`,
+        'Authorization': `Bearer ${validSession.access_token}`,
         'apikey': SUPABASE_ANON_KEY,
       },
     });
