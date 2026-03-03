@@ -124,18 +124,38 @@ async function getTabStats() {
 async function loadDashboard() {
   showView('dashboard');
   
-  // Load tabs
+  // Load tabs - this does a fresh chrome.tabs.query via background
   allTabs = await getAllTabs();
   renderRecentTabs();
+  
+  // Compute stats directly from the tabs we just received
+  renderStats(computeStatsFromTabs(allTabs));
   
   // Load recommendations
   const data = await getRecommendations();
   renderRecommendations(data.recommendations || []);
   renderArchivedTabs(data.archived || []);
-  
-  // Load stats
-  const stats = await getTabStats();
-  renderStats(stats);
+}
+
+// Compute stats from the tabs array directly (no background round-trip)
+function computeStatsFromTabs(tabs) {
+  const totalTabs = tabs.length;
+  const totalTime = tabs.reduce((acc, tab) => acc + (tab.activity?.totalTime || 0), 0);
+
+  const domains = {};
+  tabs.forEach((tab) => {
+    try {
+      const domain = new URL(tab.url).hostname.replace('www.', '');
+      domains[domain] = (domains[domain] || 0) + 1;
+    } catch {}
+  });
+
+  const topDomains = Object.entries(domains)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([domain, count]) => ({ domain, count }));
+
+  return { totalTabs, totalTime, topDomains };
 }
 
 // Render stats
@@ -447,6 +467,7 @@ setInterval(async () => {
   if (currentSession) {
     allTabs = await getAllTabs();
     renderRecentTabs();
+    renderStats(computeStatsFromTabs(allTabs));
   }
 }, 30000);
 
