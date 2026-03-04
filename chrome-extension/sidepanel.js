@@ -16,6 +16,7 @@ const searchInput = document.getElementById('search-input');
 const statsContainer = document.getElementById('stats-container');
 const refreshBtn = document.getElementById('refresh-btn');
 const refreshIntervalSelect = document.getElementById('refresh-interval-select');
+const internalTabsToggle = document.getElementById('internal-tabs-toggle');
 const lastUpdatedEl = document.getElementById('last-updated');
 
 // State
@@ -28,21 +29,27 @@ let autoRefreshIntervalMs = 3000;
 let autoRefreshTimer = null;
 let lastRefreshAt = null;
 let lastUpdatedTicker = null;
+let includeInternalTabs = false;
+let activeRefreshPromise = null;
 
 const REFRESH_INTERVAL_OPTIONS = [1000, 3000, 5000];
+const INTERNAL_TAB_PREFIXES = ['chrome://', 'about:', 'edge://', 'chrome-search://', 'devtools://', 'view-source:'];
 
 // Initialize
 async function init() {
   showView('loading');
 
-  await initializeRefreshSettings();
+  await Promise.all([
+    initializeRefreshSettings(),
+    initializeInternalTabsSetting(),
+  ]);
 
   // Check for session
   currentSession = await getSession();
 
   if (currentSession) {
-    await loadDashboard();
-    startAutoRefresh({ immediate: true });
+    await loadDashboard({ forceRescan: true });
+    startAutoRefresh({ immediate: false });
     startLastUpdatedTicker();
   } else {
     showView('login');
@@ -106,11 +113,13 @@ async function getAllTabs() {
             const isExtensionPage = rawUrl?.startsWith('chrome-extension://');
             if (isExtensionPage) return null;
 
+            const normalizedUrl = rawUrl || `tab://${tab.id}`;
             return {
               ...tab,
-              url: rawUrl || `tab://${tab.id}`,
+              url: normalizedUrl,
               title: tab.title || 'Untitled',
               favIconUrl: tab.favIconUrl || null,
+              isInternal: isInternalBrowserUrl(normalizedUrl),
             };
           })
           .filter(Boolean);
@@ -118,21 +127,7 @@ async function getAllTabs() {
         resolve(normalizedTabs);
       });
     }),
-    new Promise((resolve) => {
-      let settled = false;
-      const timeoutId = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        resolve([]);
-      }, 1200);
-
-      chrome.runtime.sendMessage({ type: 'GET_ALL_TABS' }, (response) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutId);
-        resolve(Array.isArray(response) ? response : []);
-      });
-    }),
+    fetchFromBackground('GET_ALL_TABS', {}, 1600, []),
   ]);
 
   const activityById = new Map((backgroundTabs || []).map((tab) => [tab.id, tab.activity]));
@@ -140,6 +135,44 @@ async function getAllTabs() {
     ...tab,
     activity: activityById.get(tab.id) || tab.activity || null,
   }));
+}
+
+function isInternalBrowserUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  return INTERNAL_TAB_PREFIXES.some((prefix) => url.startsWith(prefix));
+}
+
+function getVisibleTabs(tabs) {
+  if (includeInternalTabs) return tabs;
+  return tabs.filter((tab) => !isInternalBrowserUrl(tab.url));
+}
+
+async function fetchFromBackground(type, payload = {}, timeoutMs = 1500, fallback = null) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      resolve(fallback);
+    }, timeoutMs);
+
+    chrome.runtime.sendMessage({ type, ...payload }, (response) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+
+      if (chrome.runtime.lastError) {
+        resolve(fallback);
+        return;
+      }
+
+      resolve(response ?? fallback);
+    });
+  });
+}
+
+async function requestBackgroundRescan() {
+  await fetchFromBackground('REFRESH_TABS', {}, 2000, { success: false });
 }
 
 // Switch to tab
@@ -165,9 +198,8 @@ async function openWebLogin() {
 
 // Get recommendations
 async function getRecommendations() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: 'GET_RECOMMENDATIONS', session: currentSession }, resolve);
-  });
+  const data = await fetchFromBackground('GET_RECOMMENDATIONS', { session: currentSession }, 2500, { recommendations: [], archived: [] });
+  return data || { recommendations: [], archived: [] };
 }
 
 // Get tab stats
@@ -193,6 +225,20 @@ async function setStoredRefreshInterval(intervalMs) {
   });
 }
 
+async function getStoredInternalTabsVisibility() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get(['includeInternalTabs'], (result) => {
+      resolve(Boolean(result.includeInternalTabs));
+    });
+  });
+}
+
+async function setStoredInternalTabsVisibility(value) {
+  return new Promise((resolve) => {
+    chrome.storage.sync.set({ includeInternalTabs: Boolean(value) }, resolve);
+  });
+}
+
 function normalizeRefreshInterval(value) {
   const parsed = Number(value);
   return REFRESH_INTERVAL_OPTIONS.includes(parsed) ? parsed : 3000;
@@ -204,6 +250,13 @@ async function initializeRefreshSettings() {
 
   if (refreshIntervalSelect) {
     refreshIntervalSelect.value = String(autoRefreshIntervalMs);
+  }
+}
+
+async function initializeInternalTabsSetting() {
+  includeInternalTabs = await getStoredInternalTabsVisibility();
+  if (internalTabsToggle) {
+    internalTabsToggle.checked = includeInternalTabs;
   }
 }
 
@@ -235,12 +288,26 @@ function markLastUpdated() {
   renderLastUpdated();
 }
 
-async function refreshVisibleTabs() {
+async function refreshVisibleTabs({ forceRescan = false } = {}) {
   if (!currentSession) return;
-  allTabs = await getAllTabs();
-  renderRecentTabs();
-  renderStats(computeStatsFromTabs(allTabs));
-  markLastUpdated();
+  if (activeRefreshPromise) return activeRefreshPromise;
+
+  activeRefreshPromise = (async () => {
+    if (forceRescan) {
+      await requestBackgroundRescan();
+    }
+
+    allTabs = await getAllTabs();
+    renderRecentTabs();
+    renderStats(computeStatsFromTabs(allTabs));
+    markLastUpdated();
+  })();
+
+  try {
+    await activeRefreshPromise;
+  } finally {
+    activeRefreshPromise = null;
+  }
 }
 
 function stopAutoRefresh() {
@@ -264,8 +331,12 @@ function startAutoRefresh({ immediate = true } = {}) {
 }
 
 // Load dashboard data
-async function loadDashboard() {
+async function loadDashboard({ forceRescan = false } = {}) {
   showView('dashboard');
+
+  if (forceRescan) {
+    await requestBackgroundRescan();
+  }
 
   const [tabs, data] = await Promise.all([
     getAllTabs(),
@@ -277,17 +348,18 @@ async function loadDashboard() {
   renderStats(computeStatsFromTabs(allTabs));
   markLastUpdated();
 
-  renderRecommendations(data.recommendations || []);
-  renderArchivedTabs(data.archived || []);
+  renderRecommendations(data?.recommendations || []);
+  renderArchivedTabs(data?.archived || []);
 }
 
 // Compute stats from the tabs array directly (no background round-trip)
 function computeStatsFromTabs(tabs) {
   const totalTabs = tabs.length;
-  const totalTime = tabs.reduce((acc, tab) => acc + (tab.activity?.totalTime || 0), 0);
+  const visibleTabs = getVisibleTabs(tabs);
+  const totalTime = visibleTabs.reduce((acc, tab) => acc + (tab.activity?.totalTime || 0), 0);
 
   const domains = {};
-  tabs.forEach((tab) => {
+  visibleTabs.forEach((tab) => {
     try {
       const domain = new URL(tab.url).hostname.replace('www.', '');
       domains[domain] = (domains[domain] || 0) + 1;
@@ -299,7 +371,13 @@ function computeStatsFromTabs(tabs) {
     .slice(0, 5)
     .map(([domain, count]) => ({ domain, count }));
 
-  return { totalTabs, totalTime, topDomains };
+  return {
+    totalTabs,
+    visibleTabs: visibleTabs.length,
+    hiddenInternalTabs: Math.max(0, totalTabs - visibleTabs.length),
+    totalTime,
+    topDomains,
+  };
 }
 
 // Render stats
@@ -310,11 +388,15 @@ function renderStats(stats) {
   const hours = Math.floor(totalTimeMinutes / 60);
   const minutes = totalTimeMinutes % 60;
   const timeStr = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+
+  const openTabsLabel = includeInternalTabs
+    ? 'Open Tabs (all)'
+    : `Open Tabs (${stats.visibleTabs || 0} shown / ${stats.totalTabs || 0} total)`;
   
   statsContainer.innerHTML = `
     <div class="stat-item">
-      <span class="stat-value">${stats.totalTabs || 0}</span>
-      <span class="stat-label">Open Tabs</span>
+      <span class="stat-value">${includeInternalTabs ? (stats.totalTabs || 0) : (stats.visibleTabs || 0)}</span>
+      <span class="stat-label">${openTabsLabel}</span>
     </div>
     <div class="stat-item">
       <span class="stat-value">${timeStr}</span>
@@ -325,19 +407,25 @@ function renderStats(stats) {
 
 // Render recent tabs
 function renderRecentTabs() {
-  let filteredTabs = allTabs;
+  const visibleTabs = getVisibleTabs(allTabs);
+  let filteredTabs = visibleTabs;
   
   // Apply search filter
   if (searchQuery) {
     const query = searchQuery.toLowerCase();
-    filteredTabs = allTabs.filter(tab => 
+    filteredTabs = visibleTabs.filter(tab => 
       (tab.title && tab.title.toLowerCase().includes(query)) ||
       (tab.url && tab.url.toLowerCase().includes(query))
     );
   }
   
   if (filteredTabs.length === 0) {
-    recentTabsEl.innerHTML = `<p class="empty-state">${searchQuery ? 'No matching tabs' : 'No open tabs'}</p>`;
+    const emptyMessage = searchQuery
+      ? 'No matching tabs'
+      : includeInternalTabs
+        ? 'No open tabs'
+        : 'No visible tabs (enable internal tabs toggle to include chrome:// and about pages)';
+    recentTabsEl.innerHTML = `<p class="empty-state">${emptyMessage}</p>`;
     return;
   }
   
@@ -395,10 +483,7 @@ function renderRecentTabs() {
       e.stopPropagation();
       const tabId = parseInt(el.dataset.tabId);
       await closeTab(tabId);
-      allTabs = await getAllTabs();
-      renderRecentTabs();
-      renderStats(computeStatsFromTabs(allTabs));
-      markLastUpdated();
+      await refreshVisibleTabs();
     });
   });
 }
@@ -550,8 +635,8 @@ function listenForWebAppSession() {
       if (event.data.type === "AUTH_SESSION" && event.data.session) {
         await setSession(event.data.session);
         currentSession = event.data.session;
-        await loadDashboard();
-        startAutoRefresh({ immediate: true });
+        await loadDashboard({ forceRescan: true });
+        startAutoRefresh({ immediate: false });
         startLastUpdatedTicker();
       }
     };
@@ -564,8 +649,8 @@ function listenForWebAppSession() {
     if (namespace === 'local' && changes.session) {
       if (changes.session.newValue) {
         currentSession = changes.session.newValue;
-        await loadDashboard();
-        startAutoRefresh({ immediate: true });
+        await loadDashboard({ forceRescan: true });
+        startAutoRefresh({ immediate: false });
         startLastUpdatedTicker();
       } else {
         currentSession = null;
@@ -583,6 +668,15 @@ function listenForWebAppSession() {
         refreshIntervalSelect.value = String(autoRefreshIntervalMs);
       }
       startAutoRefresh({ immediate: true });
+    }
+
+    if (namespace === 'sync' && changes.includeInternalTabs !== undefined) {
+      includeInternalTabs = Boolean(changes.includeInternalTabs.newValue);
+      if (internalTabsToggle) {
+        internalTabsToggle.checked = includeInternalTabs;
+      }
+      renderRecentTabs();
+      renderStats(computeStatsFromTabs(allTabs));
     }
   });
 }
@@ -624,18 +718,22 @@ if (refreshIntervalSelect) {
   });
 }
 
+if (internalTabsToggle) {
+  internalTabsToggle.addEventListener('change', async (e) => {
+    includeInternalTabs = Boolean(e.target.checked);
+    await setStoredInternalTabsVisibility(includeInternalTabs);
+    renderRecentTabs();
+    renderStats(computeStatsFromTabs(allTabs));
+  });
+}
+
 // Refresh button - force re-scan then reload dashboard
 if (refreshBtn) {
   refreshBtn.addEventListener('click', async () => {
     refreshBtn.classList.add('spinning');
 
-    // Force background to re-scan all tabs first
-    await new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type: 'REFRESH_TABS' }, resolve);
-    });
-
-    await loadDashboard();
-    startAutoRefresh({ immediate: true });
+    await loadDashboard({ forceRescan: true });
+    startAutoRefresh({ immediate: false });
     startLastUpdatedTicker();
     setTimeout(() => refreshBtn.classList.remove('spinning'), 500);
   });
