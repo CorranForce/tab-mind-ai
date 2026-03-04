@@ -16,6 +16,7 @@ const searchInput = document.getElementById('search-input');
 const statsContainer = document.getElementById('stats-container');
 const refreshBtn = document.getElementById('refresh-btn');
 const refreshIntervalSelect = document.getElementById('refresh-interval-select');
+const lastUpdatedEl = document.getElementById('last-updated');
 
 // State
 let currentSession = null;
@@ -25,6 +26,8 @@ let liveRefreshTimeout = null;
 let tabListenersRegistered = false;
 let autoRefreshIntervalMs = 3000;
 let autoRefreshTimer = null;
+let lastRefreshAt = null;
+let lastUpdatedTicker = null;
 
 const REFRESH_INTERVAL_OPTIONS = [1000, 3000, 5000];
 
@@ -40,9 +43,11 @@ async function init() {
   if (currentSession) {
     await loadDashboard();
     startAutoRefresh({ immediate: true });
+    startLastUpdatedTicker();
   } else {
     showView('login');
     stopAutoRefresh();
+    stopLastUpdatedTicker();
   }
 
   // Listen for session updates from web app
@@ -90,32 +95,20 @@ async function clearSession() {
   });
 }
 
-// Get all tabs (merge background activity with direct browser tab query for reliability)
+// Get all tabs (direct browser query first, then merge background activity when available)
 async function getAllTabs() {
-  const [backgroundTabs, browserTabs] = await Promise.all([
-    new Promise((resolve) => {
-      chrome.runtime.sendMessage({ type: 'GET_ALL_TABS' }, (response) => {
-        resolve(Array.isArray(response) ? response : []);
-      });
-    }),
+  const [browserTabs, backgroundTabs] = await Promise.all([
     new Promise((resolve) => {
       chrome.tabs.query({}, (tabs) => {
         const normalizedTabs = (tabs || [])
           .map((tab) => {
-            const url = tab.url || tab.pendingUrl || null;
-            if (!url) return null;
-            if (
-              url.startsWith('chrome://') ||
-              url.startsWith('chrome-extension://') ||
-              url.startsWith('about:') ||
-              url.startsWith('edge://')
-            ) {
-              return null;
-            }
+            const rawUrl = tab.url || tab.pendingUrl;
+            const isExtensionPage = rawUrl?.startsWith('chrome-extension://');
+            if (isExtensionPage) return null;
 
             return {
               ...tab,
-              url,
+              url: rawUrl || `tab://${tab.id}`,
               title: tab.title || 'Untitled',
               favIconUrl: tab.favIconUrl || null,
             };
@@ -123,6 +116,21 @@ async function getAllTabs() {
           .filter(Boolean);
 
         resolve(normalizedTabs);
+      });
+    }),
+    new Promise((resolve) => {
+      let settled = false;
+      const timeoutId = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        resolve([]);
+      }, 1200);
+
+      chrome.runtime.sendMessage({ type: 'GET_ALL_TABS' }, (response) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(Array.isArray(response) ? response : []);
       });
     }),
   ]);
@@ -199,11 +207,40 @@ async function initializeRefreshSettings() {
   }
 }
 
+function renderLastUpdated() {
+  if (!lastUpdatedEl) return;
+  if (!lastRefreshAt) {
+    lastUpdatedEl.textContent = 'Updated —';
+    return;
+  }
+
+  const secondsAgo = Math.max(0, Math.floor((Date.now() - lastRefreshAt) / 1000));
+  lastUpdatedEl.textContent = `Updated ${secondsAgo}s ago`;
+}
+
+function startLastUpdatedTicker() {
+  if (lastUpdatedTicker) clearInterval(lastUpdatedTicker);
+  renderLastUpdated();
+  lastUpdatedTicker = setInterval(renderLastUpdated, 1000);
+}
+
+function stopLastUpdatedTicker() {
+  if (!lastUpdatedTicker) return;
+  clearInterval(lastUpdatedTicker);
+  lastUpdatedTicker = null;
+}
+
+function markLastUpdated() {
+  lastRefreshAt = Date.now();
+  renderLastUpdated();
+}
+
 async function refreshVisibleTabs() {
   if (!currentSession) return;
   allTabs = await getAllTabs();
   renderRecentTabs();
   renderStats(computeStatsFromTabs(allTabs));
+  markLastUpdated();
 }
 
 function stopAutoRefresh() {
@@ -229,16 +266,17 @@ function startAutoRefresh({ immediate = true } = {}) {
 // Load dashboard data
 async function loadDashboard() {
   showView('dashboard');
-  
-  // Load tabs - this does a fresh chrome.tabs.query via background
-  allTabs = await getAllTabs();
+
+  const [tabs, data] = await Promise.all([
+    getAllTabs(),
+    getRecommendations(),
+  ]);
+
+  allTabs = tabs;
   renderRecentTabs();
-  
-  // Compute stats directly from the tabs we just received
   renderStats(computeStatsFromTabs(allTabs));
-  
-  // Load recommendations
-  const data = await getRecommendations();
+  markLastUpdated();
+
   renderRecommendations(data.recommendations || []);
   renderArchivedTabs(data.archived || []);
 }
@@ -357,9 +395,10 @@ function renderRecentTabs() {
       e.stopPropagation();
       const tabId = parseInt(el.dataset.tabId);
       await closeTab(tabId);
-      // Refresh tabs
       allTabs = await getAllTabs();
       renderRecentTabs();
+      renderStats(computeStatsFromTabs(allTabs));
+      markLastUpdated();
     });
   });
 }
@@ -490,17 +529,10 @@ function getDomain(url) {
   try {
     return new URL(url).hostname.replace('www.', '');
   } catch {
-    return url;
+    return url || 'Unknown';
+  }
 }
 
-// Auto-refresh interval setting
-if (refreshIntervalSelect) {
-  refreshIntervalSelect.addEventListener('change', async (e) => {
-    autoRefreshIntervalMs = normalizeRefreshInterval(e.target.value);
-    await setStoredRefreshInterval(autoRefreshIntervalMs);
-    startAutoRefresh({ immediate: false });
-  });
-}
 
 // Escape HTML
 function escapeHtml(text) {
@@ -519,7 +551,8 @@ function listenForWebAppSession() {
         await setSession(event.data.session);
         currentSession = event.data.session;
         await loadDashboard();
-        startAutoRefresh({ immediate: false });
+        startAutoRefresh({ immediate: true });
+        startLastUpdatedTicker();
       }
     };
   } catch (e) {
@@ -532,10 +565,14 @@ function listenForWebAppSession() {
       if (changes.session.newValue) {
         currentSession = changes.session.newValue;
         await loadDashboard();
-        startAutoRefresh({ immediate: false });
+        startAutoRefresh({ immediate: true });
+        startLastUpdatedTicker();
       } else {
         currentSession = null;
         stopAutoRefresh();
+        stopLastUpdatedTicker();
+        lastRefreshAt = null;
+        renderLastUpdated();
         showView('login');
       }
     }
@@ -545,7 +582,7 @@ function listenForWebAppSession() {
       if (refreshIntervalSelect) {
         refreshIntervalSelect.value = String(autoRefreshIntervalMs);
       }
-      startAutoRefresh({ immediate: false });
+      startAutoRefresh({ immediate: true });
     }
   });
 }
@@ -559,6 +596,9 @@ logoutBtn.addEventListener('click', async () => {
   await clearSession();
   currentSession = null;
   stopAutoRefresh();
+  stopLastUpdatedTicker();
+  lastRefreshAt = null;
+  renderLastUpdated();
   showView('login');
 });
 
@@ -580,7 +620,7 @@ if (refreshIntervalSelect) {
   refreshIntervalSelect.addEventListener('change', async (e) => {
     autoRefreshIntervalMs = normalizeRefreshInterval(e.target.value);
     await setStoredRefreshInterval(autoRefreshIntervalMs);
-    startAutoRefresh({ immediate: false });
+    startAutoRefresh({ immediate: true });
   });
 }
 
@@ -588,12 +628,15 @@ if (refreshIntervalSelect) {
 if (refreshBtn) {
   refreshBtn.addEventListener('click', async () => {
     refreshBtn.classList.add('spinning');
+
     // Force background to re-scan all tabs first
     await new Promise((resolve) => {
       chrome.runtime.sendMessage({ type: 'REFRESH_TABS' }, resolve);
     });
+
     await loadDashboard();
-    startAutoRefresh({ immediate: false });
+    startAutoRefresh({ immediate: true });
+    startLastUpdatedTicker();
     setTimeout(() => refreshBtn.classList.remove('spinning'), 500);
   });
 }
