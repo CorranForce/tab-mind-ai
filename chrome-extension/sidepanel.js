@@ -18,6 +18,8 @@ const refreshBtn = document.getElementById('refresh-btn');
 const refreshIntervalSelect = document.getElementById('refresh-interval-select');
 const internalTabsToggle = document.getElementById('internal-tabs-toggle');
 const lastUpdatedEl = document.getElementById('last-updated');
+const debugToggle = document.getElementById('debug-toggle');
+const debugPanel = document.getElementById('debug-panel');
 
 // State
 let currentSession = null;
@@ -31,6 +33,9 @@ let lastRefreshAt = null;
 let lastUpdatedTicker = null;
 let includeInternalTabs = false;
 let activeRefreshPromise = null;
+let lastRescanResult = null;
+let lastBrowserTabCount = 0;
+let lastBackgroundTabCount = 0;
 
 const REFRESH_INTERVAL_OPTIONS = [1000, 3000, 5000];
 const INTERNAL_TAB_PREFIXES = ['chrome://', 'about:', 'edge://', 'chrome-search://', 'devtools://', 'view-source:'];
@@ -130,6 +135,9 @@ async function getAllTabs() {
     fetchFromBackground('GET_ALL_TABS', {}, 1600, []),
   ]);
 
+  lastBrowserTabCount = browserTabs.length;
+  lastBackgroundTabCount = (backgroundTabs || []).length;
+
   const activityById = new Map((backgroundTabs || []).map((tab) => [tab.id, tab.activity]));
   return browserTabs.map((tab) => ({
     ...tab,
@@ -172,7 +180,9 @@ async function fetchFromBackground(type, payload = {}, timeoutMs = 1500, fallbac
 }
 
 async function requestBackgroundRescan() {
-  await fetchFromBackground('REFRESH_TABS', {}, 2000, { success: false });
+  const result = await fetchFromBackground('REFRESH_TABS', {}, 2000, { success: false });
+  lastRescanResult = result?.success ? 'ok' : 'failed';
+  return result;
 }
 
 // Switch to tab
@@ -286,6 +296,7 @@ function stopLastUpdatedTicker() {
 function markLastUpdated() {
   lastRefreshAt = Date.now();
   renderLastUpdated();
+  renderDebugPanel();
 }
 
 async function refreshVisibleTabs({ forceRescan = false } = {}) {
@@ -402,6 +413,29 @@ function renderStats(stats) {
       <span class="stat-value">${timeStr}</span>
       <span class="stat-label">Tracked Today</span>
     </div>
+  `;
+}
+
+// Render debug panel
+function renderDebugPanel() {
+  if (!debugPanel) return;
+  const visibleTabs = getVisibleTabs(allTabs);
+  const hiddenCount = Math.max(0, allTabs.length - visibleTabs.length);
+  const rescanClass = lastRescanResult === 'ok' ? 'ok' : lastRescanResult === 'failed' ? 'err' : '';
+  const rescanText = lastRescanResult || '—';
+  const refreshAgo = lastRefreshAt ? `${Math.floor((Date.now() - lastRefreshAt) / 1000)}s ago` : '—';
+
+  debugPanel.innerHTML = `
+    <div class="debug-row"><span class="debug-key">Browser tabs queried</span><span class="debug-value">${lastBrowserTabCount}</span></div>
+    <div class="debug-row"><span class="debug-key">Background tabs returned</span><span class="debug-value">${lastBackgroundTabCount}</span></div>
+    <div class="debug-row"><span class="debug-key">Visible tabs</span><span class="debug-value">${visibleTabs.length}</span></div>
+    <div class="debug-row"><span class="debug-key">Hidden internal tabs</span><span class="debug-value">${hiddenCount}</span></div>
+    <div class="debug-row"><span class="debug-key">Total (allTabs[])</span><span class="debug-value">${allTabs.length}</span></div>
+    <div class="debug-row"><span class="debug-key">Last rescan</span><span class="debug-value ${rescanClass}">${rescanText}</span></div>
+    <div class="debug-row"><span class="debug-key">Last refresh</span><span class="debug-value">${refreshAgo}</span></div>
+    <div class="debug-row"><span class="debug-key">Refresh interval</span><span class="debug-value">${autoRefreshIntervalMs}ms</span></div>
+    <div class="debug-row"><span class="debug-key">Include internal</span><span class="debug-value">${includeInternalTabs ? 'yes' : 'no'}</span></div>
+    <div class="debug-row"><span class="debug-key">Session</span><span class="debug-value ${currentSession ? 'ok' : 'warn'}">${currentSession ? 'active' : 'none'}</span></div>
   `;
 }
 
@@ -700,6 +734,16 @@ archivedToggle.addEventListener('click', () => {
   archivedToggle.classList.toggle('expanded');
   archivedTabsEl.classList.toggle('collapsed');
 });
+
+if (debugToggle) {
+  debugToggle.addEventListener('click', () => {
+    debugToggle.classList.toggle('expanded');
+    debugPanel.classList.toggle('collapsed');
+    if (!debugPanel.classList.contains('collapsed')) {
+      renderDebugPanel();
+    }
+  });
+}
 
 // Search functionality
 if (searchInput) {

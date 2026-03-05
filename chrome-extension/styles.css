@@ -548,3 +548,49 @@ body {
   background: linear-gradient(180deg, var(--primary), #a855f7);
   border-radius: 2px;
 }
+
+/* Debug Panel */
+.debug-section {
+  border-top: 1px dashed var(--border);
+  margin-top: 4px;
+}
+
+.debug-panel {
+  font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
+  font-size: 11px;
+  background: var(--muted-bg);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.debug-panel.collapsed {
+  display: none;
+}
+
+.debug-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+  border-bottom: 1px dotted var(--border);
+}
+
+.debug-row:last-child {
+  border-bottom: none;
+}
+
+.debug-key {
+  color: var(--muted);
+}
+
+.debug-value {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.debug-value.ok { color: var(--success); }
+.debug-value.warn { color: var(--warning); }
+.debug-value.err { color: var(--danger); }
