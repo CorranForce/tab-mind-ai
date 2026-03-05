@@ -425,18 +425,41 @@ function renderDebugPanel() {
   const rescanText = lastRescanResult || '—';
   const refreshAgo = lastRefreshAt ? `${Math.floor((Date.now() - lastRefreshAt) / 1000)}s ago` : '—';
 
+  const debugData = {
+    browserTabsQueried: lastBrowserTabCount,
+    backgroundTabsReturned: lastBackgroundTabCount,
+    visibleTabs: visibleTabs.length,
+    hiddenInternalTabs: hiddenCount,
+    totalAllTabs: allTabs.length,
+    lastRescan: rescanText,
+    lastRefresh: refreshAgo,
+    refreshInterval: `${autoRefreshIntervalMs}ms`,
+    includeInternal: includeInternalTabs,
+    session: currentSession ? 'active' : 'none',
+  };
+
   debugPanel.innerHTML = `
-    <div class="debug-row"><span class="debug-key">Browser tabs queried</span><span class="debug-value">${lastBrowserTabCount}</span></div>
-    <div class="debug-row"><span class="debug-key">Background tabs returned</span><span class="debug-value">${lastBackgroundTabCount}</span></div>
-    <div class="debug-row"><span class="debug-key">Visible tabs</span><span class="debug-value">${visibleTabs.length}</span></div>
-    <div class="debug-row"><span class="debug-key">Hidden internal tabs</span><span class="debug-value">${hiddenCount}</span></div>
-    <div class="debug-row"><span class="debug-key">Total (allTabs[])</span><span class="debug-value">${allTabs.length}</span></div>
-    <div class="debug-row"><span class="debug-key">Last rescan</span><span class="debug-value ${rescanClass}">${rescanText}</span></div>
-    <div class="debug-row"><span class="debug-key">Last refresh</span><span class="debug-value">${refreshAgo}</span></div>
-    <div class="debug-row"><span class="debug-key">Refresh interval</span><span class="debug-value">${autoRefreshIntervalMs}ms</span></div>
-    <div class="debug-row"><span class="debug-key">Include internal</span><span class="debug-value">${includeInternalTabs ? 'yes' : 'no'}</span></div>
-    <div class="debug-row"><span class="debug-key">Session</span><span class="debug-value ${currentSession ? 'ok' : 'warn'}">${currentSession ? 'active' : 'none'}</span></div>
+    <div class="debug-row"><span class="debug-key">Browser tabs queried</span><span class="debug-value">${debugData.browserTabsQueried}</span></div>
+    <div class="debug-row"><span class="debug-key">Background tabs returned</span><span class="debug-value">${debugData.backgroundTabsReturned}</span></div>
+    <div class="debug-row"><span class="debug-key">Visible tabs</span><span class="debug-value">${debugData.visibleTabs}</span></div>
+    <div class="debug-row"><span class="debug-key">Hidden internal tabs</span><span class="debug-value">${debugData.hiddenInternalTabs}</span></div>
+    <div class="debug-row"><span class="debug-key">Total (allTabs[])</span><span class="debug-value">${debugData.totalAllTabs}</span></div>
+    <div class="debug-row"><span class="debug-key">Last rescan</span><span class="debug-value ${rescanClass}">${debugData.lastRescan}</span></div>
+    <div class="debug-row"><span class="debug-key">Last refresh</span><span class="debug-value">${debugData.lastRefresh}</span></div>
+    <div class="debug-row"><span class="debug-key">Refresh interval</span><span class="debug-value">${debugData.refreshInterval}</span></div>
+    <div class="debug-row"><span class="debug-key">Include internal</span><span class="debug-value">${debugData.includeInternal ? 'yes' : 'no'}</span></div>
+    <div class="debug-row"><span class="debug-key">Session</span><span class="debug-value ${currentSession ? 'ok' : 'warn'}">${debugData.session}</span></div>
+    <button id="copy-debug-btn" class="copy-debug-btn">📋 Copy debug info</button>
   `;
+
+  document.getElementById('copy-debug-btn').addEventListener('click', () => {
+    const text = Object.entries(debugData).map(([k, v]) => `${k}: ${v}`).join('\n');
+    navigator.clipboard.writeText(`SmartTab AI Debug\n${new Date().toISOString()}\n\n${text}`).then(() => {
+      const btn = document.getElementById('copy-debug-btn');
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => { btn.textContent = '📋 Copy debug info'; }, 1500);
+    });
+  });
 }
 
 // Render recent tabs
