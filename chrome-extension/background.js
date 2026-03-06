@@ -249,9 +249,66 @@ function trackTabActivity(tab) {
 // ── Sync ──
 
 let syncTimeout = null;
+const MAX_TABS_PER_SYNC_REQUEST = 100;
+
 function debouncedSync() {
   if (syncTimeout) clearTimeout(syncTimeout);
   syncTimeout = setTimeout(syncTabData, 3000); // Reduced from 5s to 3s
+}
+
+function isSyncableUrl(url) {
+  return !!url && !url.startsWith('chrome://') && !url.startsWith('chrome-extension://') && !url.startsWith('about:') && !url.startsWith('edge://');
+}
+
+async function collectTabsForSyncSnapshot() {
+  try {
+    const tabs = await chrome.tabs.query({});
+    const now = Date.now();
+    const currentTabIds = new Set();
+    const tabsForSync = [];
+
+    for (const tab of tabs) {
+      const url = getTabUrl(tab);
+      if (!isSyncableUrl(url)) continue;
+
+      currentTabIds.add(tab.id);
+
+      const existing = tabActivity.get(tab.id) || {
+        visits: 1,
+        totalTime: 0,
+        lastVisit: now,
+        firstVisit: now,
+      };
+
+      const normalized = {
+        id: tab.id,
+        url,
+        title: getTabTitle(tab),
+        favIconUrl: tab.favIconUrl || existing.favIconUrl || null,
+        visits: Math.max(1, existing.visits || 1),
+        totalTime: existing.totalTime || 0,
+        lastVisit: existing.lastVisit || now,
+        firstVisit: existing.firstVisit || now,
+        discarded: !!tab.discarded,
+      };
+
+      tabActivity.set(tab.id, normalized);
+      tabsForSync.push(normalized);
+    }
+
+    // Prune closed tabs from in-memory activity
+    for (const tabId of tabActivity.keys()) {
+      if (!currentTabIds.has(tabId)) {
+        tabActivity.delete(tabId);
+      }
+    }
+
+    // Deduplicate by URL (same page in multiple tabs should not overflow sync payload)
+    return Array.from(new Map(tabsForSync.map((tab) => [tab.url, tab])).values());
+  } catch (error) {
+    console.warn('SmartTab AI: Failed to query browser tabs for full sync, falling back to activity map', error);
+    return Array.from(tabActivity.values());
+  }
 }
 
 async function refreshSession(session) {
@@ -300,53 +357,62 @@ async function getValidSession() {
   return session;
 }
 
-async function syncTabData() {
-  const session = await getValidSession();
-  if (!session) return;
-
-  const tabs = Array.from(tabActivity.values());
-  if (tabs.length === 0) return;
-
-  try {
-    const response = await fetch(`${SUPABASE_URL}/functions/v1/tabs-sync`, {
+async function postSyncBatch(session, tabsBatch) {
+  const sendRequest = async (activeSession) => {
+    return fetch(`${SUPABASE_URL}/functions/v1/tabs-sync`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
+        'Authorization': `Bearer ${activeSession.access_token}`,
         'apikey': SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ tabs }),
+      body: JSON.stringify({ tabs: tabsBatch }),
     });
+  };
 
-    if (response.status === 401) {
-      // Token rejected, try one refresh
-      const refreshed = await refreshSession(session);
-      if (refreshed) {
-        const retry = await fetch(`${SUPABASE_URL}/functions/v1/tabs-sync`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${refreshed.access_token}`,
-            'apikey': SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({ tabs }),
-        });
-        if (retry.ok) {
-          const result = await retry.json();
-          console.log(`SmartTab AI: Synced ${result.synced} tabs (after refresh)`);
-        } else {
-          console.error('SmartTab AI: Sync failed after refresh:', retry.status);
-        }
-      }
-      return;
+  let response = await sendRequest(session);
+  let activeSession = session;
+
+  if (response.status === 401) {
+    const refreshed = await refreshSession(session);
+    if (!refreshed) {
+      return { synced: 0, session: session, ok: false };
+    }
+    activeSession = refreshed;
+    response = await sendRequest(refreshed);
+  }
+
+  if (!response.ok) {
+    console.error('SmartTab AI: Sync batch failed:', response.status, await response.text());
+    return { synced: 0, session: activeSession, ok: false };
+  }
+
+  const result = await response.json();
+  return {
+    synced: Number(result?.synced || 0),
+    session: activeSession,
+    ok: true,
+  };
+}
+
+async function syncTabData() {
+  let session = await getValidSession();
+  if (!session) return;
+
+  const tabs = await collectTabsForSyncSnapshot();
+  if (tabs.length === 0) return;
+
+  let totalSynced = 0;
+
+  try {
+    for (let i = 0; i < tabs.length; i += MAX_TABS_PER_SYNC_REQUEST) {
+      const batch = tabs.slice(i, i + MAX_TABS_PER_SYNC_REQUEST);
+      const batchResult = await postSyncBatch(session, batch);
+      session = batchResult.session || session;
+      totalSynced += batchResult.synced;
     }
 
-    if (response.ok) {
-      const result = await response.json();
-      console.log(`SmartTab AI: Synced ${result.synced} tabs`);
-    } else {
-      console.error('SmartTab AI: Sync failed:', response.status, await response.text());
-    }
+    console.log(`SmartTab AI: Synced ${totalSynced} tabs across ${Math.ceil(tabs.length / MAX_TABS_PER_SYNC_REQUEST)} batch(es)`);
   } catch (error) {
     console.error('SmartTab AI: Sync error:', error);
   }
