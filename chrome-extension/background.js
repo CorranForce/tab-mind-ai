@@ -511,8 +511,25 @@ async function getRecommendations(session) {
       },
     });
 
+    if (response.status === 401) {
+      // Token rejected, try one refresh
+      const refreshed = await refreshSession(validSession);
+      if (refreshed) {
+        const retry = await fetch(`${SUPABASE_URL}/functions/v1/tabs-recommend`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${refreshed.access_token}`,
+            'apikey': SUPABASE_ANON_KEY,
+          },
+        });
+        if (retry.ok) return await retry.json();
+      }
+      console.error('Failed to get recommendations after refresh');
+      return { recommendations: [], archived: [] };
+    }
+
     if (!response.ok) {
-      console.error('Failed to get recommendations');
+      console.error('Failed to get recommendations:', response.status);
       return { recommendations: [], archived: [] };
     }
 
