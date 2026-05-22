@@ -1,73 +1,57 @@
-# Welcome to your Lovable project
+# SmartTab AI Chrome Extension
 
-## Project info
+AI-powered tab organization that surfaces the tabs you need, when you need them.
 
-**URL**: https://lovable.dev/projects/24b95c2b-2f73-44d7-9dbd-bc0e1eca3d36
+## Features
 
-## How can I edit this code?
+- **Tab Tracking**: Automatically tracks your tab usage patterns
+- **Smart Recommendations**: AI-powered suggestions for tabs you might need
+- **Recently Used**: Quick access to your recently visited tabs
+- **Archived Tabs**: View and restore tabs that were auto-archived
 
-There are several ways of editing your application.
+## Installation (Development)
 
-**Use Lovable**
+1. Open Chrome and navigate to `chrome://extensions`
+2. Enable "Developer mode" in the top right corner
+3. Click "Load unpacked"
+4. Select the `chrome-extension` folder from this project
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/24b95c2b-2f73-44d7-9dbd-bc0e1eca3d36) and start prompting.
+## Usage
 
-Changes made via Lovable will be committed automatically to this repo.
+1. Click the SmartTab AI icon in your browser toolbar to open the sidebar
+2. Sign in with your SmartTab AI account (opens the web app for authentication)
+3. Your tabs will be tracked automatically
+4. View recommendations and recently used tabs in the sidebar
 
-**Use your preferred IDE**
+## File Structure
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- `manifest.json` - Extension configuration
+- `background.js` - Service worker for tab tracking and API communication
+- `content.js` - Content script for auth session transfer from web app
+- `sidepanel.html` - Sidebar UI structure
+- `sidepanel.js` - Sidebar functionality
+- `styles.css` - Sidebar styling
+- `icons/` - Extension icons (need to be added)
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+## Updating the Extension
 
-Follow these steps:
+After making changes to the extension files:
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+1. Go to `chrome://extensions`
+2. Click the refresh icon on the SmartTab AI card
+3. Reload any open web app tabs
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## Required Backend Functions
 
-# Step 3: Install the necessary dependencies.
-npm i
+The extension communicates with these edge functions:
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+- `tabs-sync` - Syncs tab activity data to the backend
+- `tabs-recommend` - Gets AI-powered tab recommendations
 
-**Edit a file directly in GitHub**
+## Icons
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/24b95c2b-2f73-44d7-9dbd-bc0e1eca3d36) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+You'll need to add extension icons in the `icons/` folder:
+- `icon16.png` (16x16)
+- `icon32.png` (32x32)  
+- `icon48.png` (48x48)
+- `icon128.png` (128x128)
