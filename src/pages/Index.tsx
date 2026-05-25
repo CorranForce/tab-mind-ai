@@ -11,6 +11,7 @@ import { FeatureComparison } from "@/components/pricing/FeatureComparison";
 import { PricingFAQ } from "@/components/pricing/PricingFAQ";
 import { ScrollToTopButton } from "@/components/ScrollToTopButton";
 import { CookieConsent } from "@/components/CookieConsent";
+import { Seo } from "@/components/Seo";
 
 const Index = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -65,6 +66,35 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle scroll-smooth">
+      <Seo
+        title="SmartTab AI — AI-Powered Browser Tab Management"
+        description="SmartTab AI organizes your Chrome tabs automatically. AI predicts what you need, surfaces relevant tabs, and archives the rest. Free 14-day trial."
+        path="/"
+        jsonLd={[
+          {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            name: "SmartTab AI",
+            applicationCategory: "BrowserApplication",
+            operatingSystem: "Chrome, Edge, Brave",
+            offers: {
+              "@type": "Offer",
+              price: "0",
+              priceCurrency: "USD",
+            },
+            description:
+              "AI-powered Chrome extension that automatically organizes tabs, surfaces relevant content, and archives unused tabs.",
+            url: "https://tab-mind-ai.lovable.app/",
+          },
+          {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            name: "SmartTab AI",
+            url: "https://tab-mind-ai.lovable.app/",
+            logo: "https://tab-mind-ai.lovable.app/favicon.png",
+          },
+        ]}
+      />
       {/* Header */}
       <header className="border-b border-border/50 backdrop-blur-sm bg-background/80 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
@@ -110,6 +140,7 @@ const Index = () => {
         </div>
       </header>
 
+      <main>
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-20 md:py-32">
         <div className="max-w-4xl mx-auto text-center">
@@ -303,6 +334,7 @@ const Index = () => {
           </Link>
         </div>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="border-t border-border mt-20">
