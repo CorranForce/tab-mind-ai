@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { usePasswordCheck } from "@/hooks/usePasswordCheck";
+import { Seo } from "@/components/Seo";
 
 type AuthMode = "signin" | "signup" | "forgot";
 
