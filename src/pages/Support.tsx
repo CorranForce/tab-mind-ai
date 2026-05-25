@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Seo } from "@/components/Seo";
 
 const Support = () => {
   const [issueType, setIssueType] = useState("");
@@ -107,6 +108,11 @@ const Support = () => {
   if (submitted) {
     return (
       <div className="min-h-screen bg-gradient-subtle">
+        <Seo
+          title="Support — SmartTab AI"
+          description="Get help with SmartTab AI. Submit bug reports, ask questions, or share feedback with our team."
+          path="/support"
+        />
         <header className="border-b border-border/50 backdrop-blur-sm bg-background/80 sticky top-0 z-50">
           <div className="container mx-auto px-4 py-4 flex items-center justify-between">
             <Link to="/" className="flex items-center gap-2">
@@ -158,6 +164,11 @@ const Support = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
+      <Seo
+        title="Support — SmartTab AI"
+        description="Get help with SmartTab AI. Submit bug reports, ask questions, or share feedback with our team."
+        path="/support"
+      />
       <header className="border-b border-border/50 backdrop-blur-sm bg-background/80 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">

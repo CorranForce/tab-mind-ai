@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { z } from "zod";
 import { usePasswordCheck } from "@/hooks/usePasswordCheck";
+import { Seo } from "@/components/Seo";
 
 type AuthMode = "signin" | "signup" | "forgot";
 
@@ -264,6 +265,11 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
+      <Seo
+        title="Sign In or Create Your SmartTab AI Account"
+        description="Sign in to SmartTab AI or create a free account to start organizing your browser tabs with AI."
+        path="/auth"
+      />
       <div className="w-full max-w-md">
         <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors">
           <ArrowLeft className="w-4 h-4" />

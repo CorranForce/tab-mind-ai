@@ -2,10 +2,16 @@ import { Link } from "react-router-dom";
 import { Brain, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollToTopButton } from "@/components/ScrollToTopButton";
+import { Seo } from "@/components/Seo";
 
 const PrivacyPolicy = () => {
   return (
     <div className="min-h-screen bg-background">
+      <Seo
+        title="Privacy Policy — SmartTab AI"
+        description="How SmartTab AI collects, uses, and protects your browsing data. Encryption, retention, and your rights explained."
+        path="/privacy"
+      />
       {/* Header */}
       <header className="border-b border-border/50 backdrop-blur-sm bg-background/80 sticky top-0 z-50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
