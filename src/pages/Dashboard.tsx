@@ -6,6 +6,7 @@ import { Brain, ExternalLink, Archive, Clock, TrendingUp, Sparkles, CreditCard, 
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { TrialCountdown } from "@/components/TrialCountdown";
 import { FeatureComparisonModal } from "@/components/FeatureComparisonModal";
+import { SyncVerifier } from "@/components/SyncVerifier";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -602,6 +603,8 @@ const DashboardContent = () => {
             {subscription?.status === "cancelled" && subscription?.trial_ends_at && (
               <TrialCountdown trialEndsAt={subscription.trial_ends_at} />
             )}
+
+            <SyncVerifier />
 
             {/* Platform Owner or Pro Card */}
             {(isPlatformOwner || isPro) && (
