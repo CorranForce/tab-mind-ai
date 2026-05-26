@@ -554,6 +554,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     getTabStats().then(sendResponse);
     return true;
   }
+
+  if (message.type === 'GET_SYNC_SNAPSHOT') {
+    collectTabsForSyncSnapshot().then((tabs) => {
+      sendResponse({
+        urls: tabs.map((t) => t.url),
+        count: tabs.length,
+      });
+    });
+    return true;
+  }
 });
 
 // ── Recommendations ──
