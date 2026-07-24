@@ -85,6 +85,8 @@ serve(async (req) => {
       logStep("Found existing customer", { customerId });
     }
 
+    const origin = req.headers.get("origin") || "https://tab-mind-ai.lovable.app";
+    
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
@@ -95,8 +97,8 @@ serve(async (req) => {
         },
       ],
       mode: "subscription",
-      success_url: `${req.headers.get("origin")}/dashboard?checkout=success`,
-      cancel_url: `${req.headers.get("origin")}/pricing?checkout=canceled`,
+      success_url: `${origin}/dashboard?checkout=success`,
+      cancel_url: `${origin}/pricing?checkout=canceled`,
     });
 
     logStep("Checkout session created", { sessionId: session.id });

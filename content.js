@@ -37,6 +37,35 @@ if (window.location.origin === WEB_APP_ORIGIN || window.location.origin.includes
         session: event.data.session
       });
     }
+
+    if (event.data.type === 'SMARTTAB_VERIFY_REQUEST') {
+      const requestId = event.data.requestId;
+      console.log('[SmartTab] Verify request received', requestId);
+      try {
+        chrome.runtime.sendMessage({ type: 'GET_SYNC_SNAPSHOT' }, (response) => {
+          if (chrome.runtime.lastError) {
+            window.postMessage({
+              type: 'SMARTTAB_VERIFY_RESPONSE',
+              requestId,
+              error: chrome.runtime.lastError.message,
+            }, window.location.origin);
+            return;
+          }
+          window.postMessage({
+            type: 'SMARTTAB_VERIFY_RESPONSE',
+            requestId,
+            urls: response?.urls || [],
+            count: response?.count || 0,
+          }, window.location.origin);
+        });
+      } catch (e) {
+        window.postMessage({
+          type: 'SMARTTAB_VERIFY_RESPONSE',
+          requestId,
+          error: String(e),
+        }, window.location.origin);
+      }
+    }
   });
   
   // Check if we're on the auth page with extension=true param

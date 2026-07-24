@@ -15,19 +15,14 @@ export const useAdminRole = () => {
           return;
         }
 
-        // Check user_roles table for admin role
-        const { data, error } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", user.id)
-          .eq("role", "admin")
-          .maybeSingle();
+        // Verify admin status through secure edge function
+        const { data, error } = await supabase.functions.invoke('check-admin');
 
         if (error) {
-          console.error("Error checking admin role:", error);
+          console.error("Error checking admin role via edge function:", error);
           setIsAdmin(false);
         } else {
-          setIsAdmin(!!data);
+          setIsAdmin(data?.isAdmin === true);
         }
       } catch (error) {
         console.error("Error in admin role check:", error);

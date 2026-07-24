@@ -32,3 +32,15 @@ verify_jwt = false
 
 [functions.get-payment-methods]
 verify_jwt = false
+
+[functions.check-admin]
+verify_jwt = false
+
+[functions.api-authenticate]
+verify_jwt = false
+
+[functions.tabs-sync]
+verify_jwt = false
+
+[functions.tabs-recommend]
+verify_jwt = false

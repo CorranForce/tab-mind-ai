@@ -1,0 +1,13 @@
+# SmartTab AI
+
+> AI-powered Chrome extension that automatically organizes browser tabs, surfaces relevant content, and archives unused tabs.
+
+SmartTab AI uses machine learning to observe browsing patterns, predict which tabs you'll need next, and quietly archive the ones you won't — with zero manual organization required. Includes cross-device sync, context awareness, and a privacy-first data model.
+
+## Pages
+
+- [Home](/): Product overview, features, and how SmartTab AI works.
+- [Pricing](/pricing): Plan comparison, feature matrix, and FAQ.
+- [Support](/support): Contact form for bug reports, questions, and feedback.
+- [Privacy Policy](/privacy): How data is collected, stored, and protected.
+- [Terms of Service](/terms): Terms governing use of the service.

@@ -69,25 +69,55 @@ serve(async (req) => {
       );
     }
 
-    const { tabs } = await req.json();
+    const body = await req.json();
+    const { tabs } = body;
+    
+    // Validate tabs array exists and has reasonable size
     if (!tabs || !Array.isArray(tabs)) {
       return new Response(JSON.stringify({ error: "Invalid tabs data" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    
+    // Enforce maximum tab count per sync request
+    const MAX_TABS_PER_SYNC = 100;
+    if (tabs.length > MAX_TABS_PER_SYNC) {
+      return new Response(
+        JSON.stringify({ error: `Too many tabs: maximum ${MAX_TABS_PER_SYNC} per sync` }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     // Upsert tab activity data
     let syncedCount = 0;
     for (const tab of tabs) {
-      if (!tab.url) continue;
+      if (!tab.url || typeof tab.url !== 'string') continue;
+
+      // Validate URL scheme - only allow http and https
+      const urlLower = tab.url.toLowerCase();
+      if (!urlLower.startsWith('http://') && !urlLower.startsWith('https://')) {
+        console.error("Invalid URL scheme, skipping tab");
+        continue;
+      }
 
       // Safely parse URL to extract domain
       let domain: string | null = null;
+      let parsedUrl: URL;
       try {
-        domain = new URL(tab.url).hostname;
+        parsedUrl = new URL(tab.url);
+        domain = parsedUrl.hostname;
+        
+        // Additional validation: hostname must exist
+        if (!domain || domain.length === 0) {
+          console.error("Empty hostname, skipping tab");
+          continue;
+        }
       } catch (e) {
-        console.error("Invalid URL format, skipping tab:", tab.url);
+        console.error("Invalid URL format, skipping tab");
         continue; // Skip this tab, process others
       }
 

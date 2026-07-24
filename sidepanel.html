@@ -44,7 +44,10 @@
               <path d="M14 9l3 3-3 3"/>
             </svg>
           </div>
-          <span class="header-title">SmartTab AI</span>
+          <div class="header-meta">
+            <span class="header-title">SmartTab AI</span>
+            <span id="last-updated" class="last-updated">Updated just now</span>
+          </div>
         </div>
         <div class="header-actions">
           <button id="refresh-btn" class="btn-icon" title="Refresh">
@@ -67,6 +70,26 @@
       <div id="stats-container" class="stats-container">
         <!-- Stats will be rendered here -->
       </div>
+
+      <!-- Refresh Controls -->
+      <div class="search-container">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v6"/>
+          <path d="M12 16v6"/>
+          <path d="M4.93 4.93l4.24 4.24"/>
+          <path d="M14.83 14.83l4.24 4.24"/>
+        </svg>
+        <select id="refresh-interval-select" class="search-input" aria-label="Auto-refresh interval">
+          <option value="1000">Auto-refresh: 1s</option>
+          <option value="3000">Auto-refresh: 3s</option>
+          <option value="5000">Auto-refresh: 5s</option>
+        </select>
+      </div>
+
+      <label class="toggle-row" for="internal-tabs-toggle">
+        <input type="checkbox" id="internal-tabs-toggle" class="toggle-checkbox">
+        <span class="toggle-label">Show internal browser tabs (chrome://, about:blank)</span>
+      </label>
 
       <!-- Search -->
       <div class="search-container">
@@ -119,6 +142,22 @@
         </h2>
         <div id="archived-tabs" class="tab-list collapsed">
           <p class="empty-state">No archived tabs</p>
+        </div>
+      </section>
+
+      <!-- Debug Panel -->
+      <section class="section debug-section">
+        <h2 class="section-title collapsible" id="debug-toggle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="section-icon">
+            <path d="M12 20v-6M6 20V10M18 20V4"/>
+          </svg>
+          Debug Info
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="chevron">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </h2>
+        <div id="debug-panel" class="debug-panel collapsed">
+          <p class="empty-state">No data yet</p>
         </div>
       </section>
     </div>
